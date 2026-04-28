@@ -12,6 +12,7 @@ Built with **Next.js 15 + TypeScript + Tailwind + Supabase (Postgres + pgvector 
 
 | Module | Status | What it does |
 | --- | --- | --- |
+| Onboarding | Live (first-login gate) | Chat-based interview where the Professor learns who you are across 7 topics. Right-rail checklist ticks off as topics are covered. Dashboard is locked until completion. |
 | Dashboard | Live | Today's mission, progress, streak, current track, recent activity & documents, professor briefing |
 | Professor | Live | Streaming chat with retrieval over your memories + documents, persistent conversations, async memory extraction |
 | Coach | Live | Daily missions (auto-generated, idempotent per day), task creation, AI-graded submissions, reflections |
@@ -45,7 +46,11 @@ npm install
 
 ### 3. Apply the schema
 
-The single migration creates all 14 tables, the `pgvector` extension, RLS policies, the `match_user_context` retrieval RPC, the `handle_new_user` trigger, the `cmo-docs` storage bucket with per-user policies, and the seed `learning_tracks` + `lessons`.
+Three migrations live under `supabase/migrations/`. Apply them in order:
+
+- `0001_init.sql` — 14 tables, `pgvector`, RLS, `match_user_context` RPC, `handle_new_user` trigger, `cmo-docs` storage bucket + policies, seed `learning_tracks` and `lessons`.
+- `0002_admin.sql` — `app_settings` (single-row Professor config) + `cmo-public` storage bucket for the Professor avatar.
+- `0003_onboarding.sql` — `profiles.onboarded_at`, `profiles.onboarding` (JSONB), `chat_conversations.kind` + `metadata` for the first-login interview.
 
 You have two options:
 
@@ -60,7 +65,7 @@ supabase db push
 
 **Option B — Paste into the SQL editor:**
 
-Open `supabase/migrations/0001_init.sql`, copy the contents, and run them in your Supabase project's SQL editor.
+Open each `supabase/migrations/*.sql` in order and run them in your Supabase project's SQL editor.
 
 ### 4. Get an OpenAI key
 
@@ -152,8 +157,11 @@ app/
     settings                     profile + privacy + stats
     pl-lab, strategy-lab,
     lifestyle, career, ai-tools  TrackComingSoon shells
+  (onboarding)/onboarding        first-login Professor interview (gated)
   api/
     chat                         streaming professor RAG
+    onboarding/chat              streaming onboarding interview + tools
+    onboarding/state             current topics_covered + onboarded flag
     coach/daily-mission          idempotent per day
     tasks/score                  AI evaluator + EMA skill update
     documents/upload             multipart → Supabase Storage
@@ -172,8 +180,11 @@ lib/
   prompts.ts                     all system prompts in one place
   parsers.ts                     pdf/docx/xlsx/pptx text extraction
   utils.ts                       cn, formatBytes, timeAgo, initials
+  onboarding/                    topics config, system prompt, tools
 supabase/
   migrations/0001_init.sql       schema + RLS + RPC + trigger + storage + seed
+  migrations/0002_admin.sql      app_settings + cmo-public storage bucket
+  migrations/0003_onboarding.sql onboarding columns on profiles + chat_conversations
 types/
   database.ts                    SkillKey, MemoryKind, labels, helpers
 middleware.ts                    auth gating via @supabase/ssr
@@ -227,6 +238,31 @@ Surface points:
 - The page itself calls `requireAdmin()` from `[lib/admin.ts](lib/admin.ts)` for hard server-side gating.
 
 To change the admin: update `ADMIN_EMAIL` in `.env.local` and restart the dev server.
+
+---
+
+## Onboarding (first-login interview)
+
+The first time a user logs in, the `(app)` layout sees `profiles.onboarded_at IS NULL` and redirects them to `/onboarding`. They can't reach the dashboard until the Professor has interviewed them across 7 topics:
+
+1. Who you are
+2. Living situation
+3. Hobbies
+4. Interests
+5. Lifestyle
+6. Marketing knowledge
+7. Career goal & ambition
+
+The interview runs as a streaming chat against [`app/api/onboarding/chat/route.ts`](app/api/onboarding/chat/route.ts) with two AI tools:
+
+- `mark_topic_complete(topic_id)` — the Professor calls this the moment a topic is covered. The right-rail checklist ticks off in real time via the AI SDK's `StreamData` channel, and the topic is persisted to `chat_conversations.metadata.topics_covered` so refreshing the page resumes seamlessly.
+- `complete_onboarding(payload)` — called once the last topic is wrapped. The handler ([`lib/onboarding/tools.ts`](lib/onboarding/tools.ts)) writes the structured profile to `profiles.onboarding` (JSONB), sets `profiles.onboarded_at`, then embeds and inserts per-topic memories so the Professor recalls them in every future chat. The page redirects to `/dashboard` automatically.
+
+Topic config is a single source of truth in [`lib/onboarding/topics.ts`](lib/onboarding/topics.ts) — easy to add or reorder topics later. The system prompt for the interview lives in [`lib/onboarding/prompt.ts`](lib/onboarding/prompt.ts).
+
+> The first user account that logs in after the migration runs will be redirected to `/onboarding` because their `onboarded_at` is `NULL`. This is expected and the way to test the full flow.
+
+---
 
 ## What's intentionally out of scope (for now)
 
