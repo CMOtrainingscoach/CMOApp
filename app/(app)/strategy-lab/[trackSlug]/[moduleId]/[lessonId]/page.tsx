@@ -50,7 +50,9 @@ export default async function LessonPage({
 
   const { data: lesson } = await admin
     .from("strategy_lessons")
-    .select("id, ord, title, learning_objective, estimated_minutes, xp_reward, module_id")
+    .select(
+      "id, ord, title, learning_objective, estimated_minutes, xp_reward, module_id, hero_image_url",
+    )
     .eq("id", lessonId)
     .eq("module_id", module.id)
     .maybeSingle();
@@ -123,18 +125,31 @@ export default async function LessonPage({
               <Sparkles className="size-3" /> +{lesson.xp_reward} XP
             </span>
           </div>
-          <h1 className="mt-3 font-display text-4xl tracking-tight gold-text">
-            {lesson.title}
-          </h1>
-          {lesson.learning_objective && (
-            <p className="mt-3 text-base text-text-secondary leading-relaxed">
-              {lesson.learning_objective}
-            </p>
+          {(lesson.hero_image_url as string | null) ? (
+            lesson.learning_objective && (
+              <p className="mt-4 text-base text-text-secondary leading-relaxed max-w-3xl">
+                {lesson.learning_objective as string}
+              </p>
+            )
+          ) : (
+            <>
+              <h1 className="mt-3 font-display text-4xl tracking-tight gold-text">
+                {lesson.title}
+              </h1>
+              {lesson.learning_objective && (
+                <p className="mt-3 text-base text-text-secondary leading-relaxed">
+                  {lesson.learning_objective as string}
+                </p>
+              )}
+            </>
           )}
         </header>
 
         <LessonRunner
           lessonId={lesson.id as string}
+          lessonTitle={lesson.title as string}
+          moduleTitle={module.title as string}
+          heroImageUrl={(lesson.hero_image_url as string | null) ?? null}
           trackSlug={trackSlug}
           moduleId={module.id as string}
           nextLessonId={(nextLesson?.id as string) ?? null}

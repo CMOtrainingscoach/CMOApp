@@ -46,12 +46,13 @@ npm install
 
 ### 3. Apply the schema
 
-Three migrations live under `supabase/migrations/`. Apply them in order:
+SQL migrations live under `supabase/migrations/`. Apply them in order:
 
 - `0001_init.sql` — 14 tables, `pgvector`, RLS, `match_user_context` RPC, `handle_new_user` trigger, `cmo-docs` storage bucket + policies, seed `learning_tracks` and `lessons`.
 - `0002_admin.sql` — `app_settings` (single-row Professor config) + `cmo-public` storage bucket for the Professor avatar.
 - `0003_onboarding.sql` — `profiles.onboarded_at`, `profiles.onboarding` (JSONB), `chat_conversations.kind` + `metadata` for the first-login interview.
 - `0004_strategy_lab.sql` — Strategy Lab: 15 tables (`strategy_tracks`, `strategy_modules`, `strategy_lessons`, `lesson_minigames`, `lesson_questions`, `module_assignments`, `module_rewards`, `lesson_progress`, `lesson_theory_cache`, `assignment_submissions`, `assignment_reviews`, `xp_log`, `user_level`, `reward_unlocks`, `streak_tracking`), RLS, `compute_rank`, `handle_xp_log_insert` trigger, `module_is_unlocked` RPC, and seeds for 12 tracks plus the full Positioning Strategy curriculum.
+- `0005_lesson_hero_image.sql` — Optional `strategy_lessons.hero_image_url` for per-lesson Professor hero images uploaded in the Strategy Lab admin.
 
 You have two options:
 
@@ -206,6 +207,7 @@ supabase/
   migrations/0002_admin.sql          app_settings + cmo-public storage bucket
   migrations/0003_onboarding.sql     onboarding columns on profiles + chat_conversations
   migrations/0004_strategy_lab.sql   Strategy Lab schema + RLS + XP trigger + RPC + curriculum seed
+  migrations/0005_lesson_hero_image.sql  lesson hero portrait URL column
 types/
   database.ts                    SkillKey, MemoryKind, labels, helpers
 middleware.ts                    auth gating via @supabase/ssr
@@ -347,7 +349,7 @@ Module rewards are unlockable artifacts (kinds: `letter`, `template`, `quote_car
 `/admin/strategy` is the CMS. Pick a track, then edit:
 
 - Modules — title, summary, description, XP, drag-style ordering via the order field.
-- Lessons — title, learning objective, key points (one per line), minutes, XP. Each lesson exposes a **Regenerate caches** button that clears `lesson_theory_cache` (all users) and `lesson_questions` for that lesson, forcing a fresh AI run on next view.
+- Lessons — title, learning objective, key points (one per line), minutes, XP, and an optional **lesson Professor image** (JPEG/PNG/WebP, stored in `cmo-public/strategy-lessons/...`, URL on `strategy_lessons.hero_image_url`) shown on the lesson theory and challenge screens. Each lesson exposes a **Regenerate caches** button that clears `lesson_theory_cache` (all users) and `lesson_questions` for that lesson, forcing a fresh AI run on next view.
 - Assignment — title, prompt, rubric (JSON), success criteria, max score.
 - Rewards — kind, title, description, content JSON.
 

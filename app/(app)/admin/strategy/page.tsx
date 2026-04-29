@@ -133,7 +133,7 @@ async function TrackEditor({
           admin
             .from("strategy_lessons")
             .select(
-              "id, module_id, ord, title, learning_objective, key_points, estimated_minutes, xp_reward",
+              "id, module_id, ord, title, learning_objective, key_points, estimated_minutes, xp_reward, hero_image_url",
             )
             .in("module_id", moduleIds)
             .order("ord", { ascending: true }),
@@ -170,6 +170,7 @@ async function TrackEditor({
         key_points: ((l.key_points as string[] | null) ?? []) as string[],
         estimated_minutes: (l.estimated_minutes as number) ?? 8,
         xp_reward: (l.xp_reward as number) ?? 50,
+        hero_image_url: (l.hero_image_url as string | null) ?? null,
       }))}
       assignments={(assignments ?? []).map((a) => ({
         id: a.id as string,

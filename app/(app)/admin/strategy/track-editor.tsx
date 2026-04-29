@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Plus,
   Save,
@@ -21,6 +21,7 @@ import {
   upsertAssignment,
   upsertReward,
 } from "./actions";
+import { LessonHeroUploader } from "./lesson-hero-uploader";
 
 type ModuleT = {
   id: string;
@@ -39,6 +40,7 @@ type LessonT = {
   key_points: string[];
   estimated_minutes: number;
   xp_reward: number;
+  hero_image_url: string | null;
 };
 type AssignmentT = {
   id: string;
@@ -103,6 +105,7 @@ export function TrackEditorClient({
                   }`}
                 >
                   <ModuleRow
+                    trackId={trackId}
                     module={m}
                     active={activeModuleId === m.id}
                     onSelect={() => setActiveModuleId(m.id)}
@@ -138,10 +141,12 @@ export function TrackEditorClient({
 }
 
 function ModuleRow({
+  trackId,
   module,
   active,
   onSelect,
 }: {
+  trackId: string;
   module: ModuleT;
   active: boolean;
   onSelect: () => void;
@@ -205,7 +210,7 @@ function ModuleRow({
             start(async () => {
               await upsertModule({
                 id: module.id,
-                track_id: "",
+                track_id: trackId,
                 ord: draft.ord,
                 title: draft.title,
                 summary: draft.summary,
@@ -356,6 +361,14 @@ function LessonEditor({ lesson }: { lesson: LessonT }) {
   );
   const [open, setOpen] = useState(false);
 
+  useEffect(() => {
+    setDraft((d) =>
+      d.id === lesson.id
+        ? { ...d, hero_image_url: lesson.hero_image_url }
+        : d,
+    );
+  }, [lesson.id, lesson.hero_image_url]);
+
   const save = () => {
     start(async () => {
       const points = keyPointsText
@@ -470,6 +483,12 @@ function LessonEditor({ lesson }: { lesson: LessonT }) {
             label="XP"
             value={draft.xp_reward}
             onChange={(n) => setDraft({ ...draft, xp_reward: n })}
+          />
+          <LessonHeroUploader
+            key={`${lesson.id}-${draft.hero_image_url ?? "none"}`}
+            lessonId={lesson.id}
+            lessonTitle={draft.title || lesson.title}
+            initialUrl={draft.hero_image_url}
           />
           <Button onClick={save} disabled={pending} variant="gold">
             {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
