@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowRight, BookOpen, Sparkles, Target } from "lucide-react";
@@ -17,6 +18,8 @@ type Props = {
   lessonTitle: string;
   moduleTitle: string;
   heroImageUrl: string | null;
+  /** Rendered immediately under {@link LessonHeroBanner} when hero is shown (e.g. "What you'll master"). */
+  learningObjectiveBelowHero?: ReactNode;
   trackSlug: string;
   moduleId: string;
   nextLessonId: string | null;
@@ -29,6 +32,7 @@ export function LessonRunner({
   lessonTitle,
   moduleTitle,
   heroImageUrl,
+  learningObjectiveBelowHero,
   trackSlug,
   moduleId,
   nextLessonId,
@@ -72,8 +76,21 @@ export function LessonRunner({
       const data = (await res.json()) as {
         next_lesson_id?: string | null;
         is_last_lesson?: boolean;
+        error?: string;
       };
-      const next = data.next_lesson_id ?? nextLessonId;
+
+      const nextRemote = data.next_lesson_id ?? undefined;
+      const next = nextRemote ?? nextLessonId ?? null;
+
+      if (!res.ok) {
+        if (next) {
+          router.push(`/strategy-lab/${trackSlug}/${moduleId}/${next}`);
+        } else {
+          router.push(`/strategy-lab/${trackSlug}`);
+        }
+        return;
+      }
+
       if (data.is_last_lesson) {
         router.push(`/strategy-lab/${trackSlug}/${moduleId}/assignment`);
         return;
@@ -82,7 +99,7 @@ export function LessonRunner({
         router.push(`/strategy-lab/${trackSlug}/${moduleId}/${next}`);
         return;
       }
-      router.push(`/strategy-lab/${trackSlug}/${moduleId}`);
+      router.push(`/strategy-lab/${trackSlug}`);
     } finally {
       setCompleting(false);
     }
@@ -99,6 +116,7 @@ export function LessonRunner({
               moduleTitle={moduleTitle}
             />
           )}
+          {learningObjectiveBelowHero}
           <div className="card-premium p-6 sm:p-10">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300 mb-4">
             <BookOpen className="size-3.5" />
@@ -171,6 +189,7 @@ export function LessonRunner({
               moduleTitle={moduleTitle}
             />
           )}
+          {learningObjectiveBelowHero}
           <MinigameRunner
             lessonId={lessonId}
             questions={questions}

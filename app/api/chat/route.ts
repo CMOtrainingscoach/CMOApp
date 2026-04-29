@@ -10,6 +10,7 @@ import {
 import { buildProfessorSystemPrompt } from "@/lib/professor-config";
 import { getProfessorConfig } from "@/lib/professor-config.server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { loadStrategyLessonAnchor } from "@/lib/strategy/lesson-chat-anchor";
 
 export const maxDuration = 60;
 
@@ -23,7 +24,23 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     messages: CoreMessage[];
     conversationId?: string;
+    /** When set, validates Strategy Lab unlock and appends lesson grounding to system prompt. */
+    lessonId?: string;
   };
+
+  let lessonAnchorBlock = "";
+  let lessonConvTitle: string | null = null;
+  if (body.lessonId) {
+    const loaded = await loadStrategyLessonAnchor(body.lessonId, user.id);
+    if (!loaded) {
+      return NextResponse.json(
+        { error: "lesson_forbidden_or_missing" },
+        { status: 403 },
+      );
+    }
+    lessonAnchorBlock = `\n\n${loaded.anchor}`;
+    lessonConvTitle = loaded.conversationTitleBase;
+  }
   const incoming = body.messages ?? [];
   if (incoming.length === 0) {
     return NextResponse.json({ error: "no messages" }, { status: 400 });
@@ -43,7 +60,9 @@ export async function POST(req: Request) {
       .from("chat_conversations")
       .insert({
         user_id: user.id,
-        title: lastUserText.slice(0, 60),
+        title:
+          lessonConvTitle ??
+          (lastUserText.slice(0, 60) || "New conversation"),
       })
       .select("id")
       .single();
@@ -78,7 +97,7 @@ export async function POST(req: Request) {
     PROFESSOR_SYSTEM,
   );
 
-  const systemMessage = `${compiledProfessorPrompt}
+  const systemMessage = `${compiledProfessorPrompt}${lessonAnchorBlock}
 
 USER PROFILE:
 - Name: ${profile?.display_name ?? "the user"}

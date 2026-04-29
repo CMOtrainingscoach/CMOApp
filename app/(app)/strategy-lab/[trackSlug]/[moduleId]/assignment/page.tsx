@@ -41,7 +41,7 @@ export default async function AssignmentPage({
     .select("id, title, prompt, rubric, success_criteria, max_score")
     .eq("module_id", module.id)
     .maybeSingle();
-  if (!assignment) notFound();
+  if (!assignment) redirect(`/strategy-lab/${trackSlug}`);
 
   const [{ data: profile }, { data: lastSubmission }] = await Promise.all([
     supabase

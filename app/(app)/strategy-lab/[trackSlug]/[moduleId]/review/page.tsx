@@ -41,7 +41,7 @@ export default async function ReviewPage({
     .select("id, title")
     .eq("module_id", module.id)
     .maybeSingle();
-  if (!assignment) notFound();
+  if (!assignment) redirect(`/strategy-lab/${trackSlug}`);
 
   // Latest submission + review for this user
   const { data: submission } = await admin

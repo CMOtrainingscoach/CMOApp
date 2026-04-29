@@ -20,14 +20,16 @@ export function FillStep({
   locked,
   correctIndex,
 }: Props) {
+  const steps = payload.steps ?? [];
+  const options = payload.options ?? [];
   const blankFilledLabel =
-    selected != null ? payload.options[selected] : null;
+    selected != null ? options[selected] : null;
 
   return (
     <div className="space-y-5">
       <p className="text-lg leading-relaxed text-text-primary">{prompt}</p>
       <ol className="space-y-2">
-        {payload.steps.map((step, i) => (
+        {steps.map((step, i) => (
           <li
             key={i}
             className={cn(
@@ -59,7 +61,7 @@ export function FillStep({
         ))}
       </ol>
       <div className="grid gap-2 sm:grid-cols-2">
-        {payload.options.map((opt, i) => {
+        {options.map((opt, i) => {
           const isSelected = selected === i;
           const isCorrect = locked && correctIndex === i;
           const isWrong = locked && isSelected && correctIndex !== i;

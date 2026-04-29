@@ -39,10 +39,12 @@ const CaseCorrect = z.object({
   keywords: z.array(z.string().min(2).max(60)).min(2).max(8),
 });
 
+/** FillPayload must be tried before McPayload: both shapes include `options`, and Zod's object
+ * schema would otherwise absorb fill_step rows and strip `steps` from the parsed output. */
 const QuestionSchema = z.object({
   kind: QuestionKindEnum,
   prompt: z.string().min(8).max(700),
-  payload: z.union([McPayload, TfPayload, FillPayload, CasePayload]),
+  payload: z.union([FillPayload, McPayload, TfPayload, CasePayload]),
   correct: z.union([McCorrect, TfCorrect, FillCorrect, CaseCorrect]),
   explanation: z.string().min(8).max(500),
 });

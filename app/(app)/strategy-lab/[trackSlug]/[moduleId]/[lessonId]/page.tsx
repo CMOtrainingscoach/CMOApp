@@ -6,6 +6,9 @@ import { Topbar } from "@/components/shell/topbar";
 import { getOrGenerateTheory } from "@/lib/strategy/theory";
 import { getOrGenerateMinigame } from "@/lib/strategy/minigame";
 import { LessonRunner } from "./lesson-runner";
+import { LessonObjectivesProfessorRow } from "@/components/strategy/lesson-objectives-professor-row";
+import { LearningObjectivePanel } from "@/components/strategy/learning-objective-panel";
+import { getProfessorConfig } from "@/lib/professor-config.server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -58,7 +61,7 @@ export default async function LessonPage({
     .maybeSingle();
   if (!lesson) notFound();
 
-  const [{ data: profile }, theory, minigame, { data: progressRow }] =
+  const [{ data: profile }, theory, minigame, { data: progressRow }, professorCfg] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -73,6 +76,7 @@ export default async function LessonPage({
         .eq("user_id", user.id)
         .eq("lesson_id", lesson.id)
         .maybeSingle(),
+      getProfessorConfig(),
     ]);
 
   // Touch progress as in_progress so the user appears on this lesson
@@ -95,8 +99,35 @@ export default async function LessonPage({
     .eq("module_id", module.id)
     .order("ord", { ascending: true });
   const nextLesson = siblings?.find((s) => (s.ord as number) > (lesson.ord as number)) ?? null;
+  const lessonTotal = siblings?.length ?? 0;
 
   const displayName = profile?.display_name ?? "Operator";
+
+  const learningObjectiveSlot = lesson.learning_objective ?
+      <LearningObjectivePanel
+        text={lesson.learning_objective as string}
+        className="mt-0 max-w-none"
+      />
+    : null;
+
+  const objectivesProfessorRowHeader = (
+    <LessonObjectivesProfessorRow
+      lessonId={lesson.id as string}
+      learningObjectiveSlot={learningObjectiveSlot}
+      professorName={professorCfg.professor_name}
+      professorAvatarUrl={professorCfg.professor_avatar_url}
+    />
+  );
+
+  const objectivesProfessorRowHero = (
+    <LessonObjectivesProfessorRow
+      className="mt-0"
+      lessonId={lesson.id as string}
+      learningObjectiveSlot={learningObjectiveSlot}
+      professorName={professorCfg.professor_name}
+      professorAvatarUrl={professorCfg.professor_avatar_url}
+    />
+  );
 
   return (
     <>
@@ -113,10 +144,17 @@ export default async function LessonPage({
           <ArrowLeft className="size-3.5" /> Back to module
         </Link>
 
-        <header className="mt-6 mb-8 max-w-3xl">
+        <header
+          className={
+            (lesson.hero_image_url as string | null) ?
+              "mt-6 mb-8 max-w-3xl"
+            : "mt-6 mb-8 max-w-6xl xl:max-w-[1200px]"
+          }
+        >
           <div className="flex flex-wrap items-center gap-3">
             <span className="badge-gold">
-              Lesson {(lesson.ord as number) + 1} of 5
+              Lesson {(lesson.ord as number) + 1}
+              {lessonTotal > 0 ? ` of ${lessonTotal}` : ""}
             </span>
             <span className="badge-muted inline-flex items-center gap-1">
               <Clock className="size-3" /> {lesson.estimated_minutes ?? 8} min
@@ -125,22 +163,12 @@ export default async function LessonPage({
               <Sparkles className="size-3" /> +{lesson.xp_reward} XP
             </span>
           </div>
-          {(lesson.hero_image_url as string | null) ? (
-            lesson.learning_objective && (
-              <p className="mt-4 text-base text-text-secondary leading-relaxed max-w-3xl">
-                {lesson.learning_objective as string}
-              </p>
-            )
-          ) : (
+          {(lesson.hero_image_url as string | null) ? null : (
             <>
               <h1 className="mt-3 font-display text-4xl tracking-tight gold-text">
                 {lesson.title}
               </h1>
-              {lesson.learning_objective && (
-                <p className="mt-3 text-base text-text-secondary leading-relaxed">
-                  {lesson.learning_objective as string}
-                </p>
-              )}
+              {objectivesProfessorRowHeader}
             </>
           )}
         </header>
@@ -150,6 +178,11 @@ export default async function LessonPage({
           lessonTitle={lesson.title as string}
           moduleTitle={module.title as string}
           heroImageUrl={(lesson.hero_image_url as string | null) ?? null}
+          learningObjectiveBelowHero={
+            (lesson.hero_image_url as string | null) ?
+              objectivesProfessorRowHero
+            : null
+          }
           trackSlug={trackSlug}
           moduleId={module.id as string}
           nextLessonId={(nextLesson?.id as string) ?? null}
