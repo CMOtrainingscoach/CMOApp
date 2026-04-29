@@ -46,12 +46,16 @@ export function Sidebar({
   weeklyStreak,
   role,
   isAdmin = false,
+  rank,
+  level,
 }: {
   displayName: string;
   avatarUrl?: string | null;
   weeklyStreak: number;
   role: string;
   isAdmin?: boolean;
+  rank?: string | null;
+  level?: number | null;
 }) {
   const pathname = usePathname();
   const items: NavItem[] = isAdmin
@@ -119,7 +123,30 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 space-y-2">
+        {rank && (
+          <Link
+            href="/strategy-lab/progress"
+            className="card-premium p-4 block hover:border-border-gold transition-colors"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] tracking-[0.18em] uppercase text-gold-500">
+                Rank
+              </div>
+              {level != null && (
+                <span className="text-[10px] tracking-[0.18em] uppercase text-text-muted">
+                  Lv. {level}
+                </span>
+              )}
+            </div>
+            <div className="font-display text-xl gold-text leading-tight">
+              {rank}
+            </div>
+            <div className="mt-1 text-[10px] text-text-muted leading-tight">
+              Strategy Lab progression
+            </div>
+          </Link>
+        )}
         <div className="card-premium p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] tracking-[0.18em] uppercase text-gold-500">

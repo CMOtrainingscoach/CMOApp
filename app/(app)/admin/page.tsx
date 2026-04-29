@@ -1,4 +1,5 @@
-import { ShieldCheck, Sparkles, Clock, AtSign } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, Sparkles, Clock, AtSign, BookOpen, ArrowRight } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import {
   Card,
@@ -52,6 +53,28 @@ export default async function AdminPage() {
           </Card>
 
           <AdminForm initial={cfg} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <BookOpen className="size-3.5" /> Strategy Lab CMS
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                Author the curriculum: tracks, modules, lessons, end-of-module
+                assignments, and rewards. Regenerate AI-cached theory and
+                mini-games per lesson.
+              </p>
+              <Link
+                href="/admin/strategy"
+                className="btn-gold px-4 py-2 inline-flex items-center gap-2 text-sm"
+              >
+                Open Strategy CMS
+                <ArrowRight className="size-4" />
+              </Link>
+            </CardBody>
+          </Card>
         </div>
 
         <div className="space-y-5">

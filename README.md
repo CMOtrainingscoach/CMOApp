@@ -20,8 +20,8 @@ Built with **Next.js 15 + TypeScript + Tailwind + Supabase (Postgres + pgvector 
 | Progress | Live | 8 skill scores (0-100), 12-week discipline heatmap, overall CMO Index ring |
 | Settings | Live | Profile, persona summary used by the Professor, account stats, sign-out |
 | Admin | Live (gated) | Set the Professor's name, voice, and avatar image. Visible only to the user matching `ADMIN_EMAIL`. |
+| Strategy Lab | Live | Duolingo-style executive learning system: 12 tracks, AI-generated theory, mini-game challenges, end-of-module assignments graded by the Professor, XP / rank / streak progression, and reward unlocks. Positioning Strategy is the v1 fully-built track (4 modules × 5 lessons + 4 assignments + 4 rewards). |
 | P&L Lab | Track shell | Curriculum and target outcomes ready; calculators in development |
-| Strategy Lab | Track shell | Frameworks index ready; interactive workspaces in development |
 | Lifestyle | Track shell | Curriculum and outcomes ready; tracking in development |
 | Career | Track shell | Curriculum and outcomes ready; workspace in development |
 | AI Tools | Track shell | Curriculum and outcomes ready; workshops in development |
@@ -51,6 +51,7 @@ Three migrations live under `supabase/migrations/`. Apply them in order:
 - `0001_init.sql` — 14 tables, `pgvector`, RLS, `match_user_context` RPC, `handle_new_user` trigger, `cmo-docs` storage bucket + policies, seed `learning_tracks` and `lessons`.
 - `0002_admin.sql` — `app_settings` (single-row Professor config) + `cmo-public` storage bucket for the Professor avatar.
 - `0003_onboarding.sql` — `profiles.onboarded_at`, `profiles.onboarding` (JSONB), `chat_conversations.kind` + `metadata` for the first-login interview.
+- `0004_strategy_lab.sql` — Strategy Lab: 15 tables (`strategy_tracks`, `strategy_modules`, `strategy_lessons`, `lesson_minigames`, `lesson_questions`, `module_assignments`, `module_rewards`, `lesson_progress`, `lesson_theory_cache`, `assignment_submissions`, `assignment_reviews`, `xp_log`, `user_level`, `reward_unlocks`, `streak_tracking`), RLS, `compute_rank`, `handle_xp_log_insert` trigger, `module_is_unlocked` RPC, and seeds for 12 tracks plus the full Positioning Strategy curriculum.
 
 You have two options:
 
@@ -140,6 +141,10 @@ All user-owned tables are guarded by `auth.uid() = user_id` RLS policies. Storag
 - **Daily mission** (`lib/coach.ts`) — Composes profile + weakest 2 skills + recent reflections + current track + recent docs, calls `generateObject` with a `zod` schema, and inserts into `daily_missions` (unique per day).
 - **Submission scoring** (`app/api/tasks/score/route.ts`) — Honest 0-100 score plus strengths/gaps/next-steps and per-skill deltas; deltas are applied via an exponential moving average (alpha 0.3) to `skill_scores`.
 - **Document processing** (`app/api/documents/process/route.ts`) — Parses PDF/DOCX/XLSX/PPTX/TXT, chunks (~800 tokens, 100 overlap), batch-embeds, inserts to `document_chunks`, then summarizes + extracts key insights with structured output.
+- **Strategy Lab theory** (`lib/strategy/theory.ts`) — Per-user cached lesson body. On first access, retrieves user memories via `retrieveContext`, calls `generateText` with `STRATEGY_PROFESSOR_TEACHING_SYSTEM`, and stores the result in `lesson_theory_cache`.
+- **Strategy Lab mini-game** (`lib/strategy/minigame.ts`) — Global cache. `generateObject` with a zod schema produces 4-6 questions per lesson (multiple choice / true-false / fill step / case scenario). Persisted to `lesson_questions`. `evaluateAnswer` validates submissions; case scenarios are graded against keyword targets stored on the question.
+- **Strategy Lab grader** (`lib/strategy/grader.ts`) — Reviews end-of-module assignments. `generateObject` produces a structured review (score, strengths, weaknesses, required revisions, verdict, feedback markdown, skill deltas). Pass verdict (≥70 + no revisions) awards XP, unlocks rewards, and applies the deltas via the EMA path used by `lib/scorer.ts`.
+- **XP / rank / streak** (`lib/strategy/xp.ts`) — Logs XP events, lets a Postgres trigger recompute total/level/rank, and bumps `streak_tracking` based on local-day cadence.
 
 ---
 
@@ -155,8 +160,16 @@ app/
     documents                    drag-drop, parse, summarize
     progress                     skill grid + 12-week heatmap
     settings                     profile + privacy + stats
-    pl-lab, strategy-lab,
-    lifestyle, career, ai-tools  TrackComingSoon shells
+    pl-lab, lifestyle,
+    career, ai-tools             TrackComingSoon shells
+    strategy-lab/                Strategy Lab home + 12-track grid + rank header
+      [trackSlug]                track detail (module path, locked/unlocked)
+        [moduleId]/[lessonId]    lesson runner: theory → minigame → complete
+        [moduleId]/assignment    end-of-module brief + submission
+        [moduleId]/review        Professor's grade + verdict + reward unlock
+        [moduleId]/reward        cinematic reward reveal
+      progress                   XP dashboard, rank progression spine, recent XP
+    admin/strategy               authoring CMS for tracks/modules/lessons/assignments/rewards
   (onboarding)/onboarding        first-login Professor interview (gated)
   api/
     chat                         streaming professor RAG
@@ -166,6 +179,12 @@ app/
     tasks/score                  AI evaluator + EMA skill update
     documents/upload             multipart → Supabase Storage
     documents/process            parse + embed + summarize
+    strategy/lessons/[id]/theory      get-or-generate per-user lesson body
+    strategy/lessons/[id]/minigame    get-or-generate questions
+    strategy/lessons/[id]/answer      validate one answer + award XP
+    strategy/lessons/[id]/complete    mark complete + lesson XP + bump streak
+    strategy/assignments/[id]/submit  persist + grade synchronously
+    strategy/rewards/[id]/view        mark a reward unlock as viewed
 components/
   ui/                            Card, Button, Input, ProgressRing, SkillBar, …
   shell/                         Sidebar, Topbar, TrackComingSoon
@@ -181,10 +200,12 @@ lib/
   parsers.ts                     pdf/docx/xlsx/pptx text extraction
   utils.ts                       cn, formatBytes, timeAgo, initials
   onboarding/                    topics config, system prompt, tools
+  strategy/{xp,theory,minigame,grader}.ts  Strategy Lab AI pipeline + XP/rank/streak
 supabase/
-  migrations/0001_init.sql       schema + RLS + RPC + trigger + storage + seed
-  migrations/0002_admin.sql      app_settings + cmo-public storage bucket
-  migrations/0003_onboarding.sql onboarding columns on profiles + chat_conversations
+  migrations/0001_init.sql           schema + RLS + RPC + trigger + storage + seed
+  migrations/0002_admin.sql          app_settings + cmo-public storage bucket
+  migrations/0003_onboarding.sql     onboarding columns on profiles + chat_conversations
+  migrations/0004_strategy_lab.sql   Strategy Lab schema + RLS + XP trigger + RPC + curriculum seed
 types/
   database.ts                    SkillKey, MemoryKind, labels, helpers
 middleware.ts                    auth gating via @supabase/ssr
@@ -264,12 +285,83 @@ Topic config is a single source of truth in [`lib/onboarding/topics.ts`](lib/onb
 
 ---
 
+## Strategy Lab
+
+The Strategy Lab is a Duolingo-style executive learning system designed to feel like an MBA elective taught by a partner at a top consulting firm. It is the most opinionated module in the platform.
+
+### Structure
+
+```
+Track → 4 modules → 5 lessons each → end-of-module assignment → reward unlock
+```
+
+- **12 tracks** seeded in `0004_strategy_lab.sql` (Strategic Thinking, 5C, Porter, Positioning Strategy, ICP, Messaging, Lead Gen, GTM, Competitive Analysis, Growth Levers, Executive Decisions, Marketing OS).
+- **Positioning Strategy** is the v1 fully-built track: 4 modules × 5 lessons + 4 graded assignments + 4 unlockable rewards. The other 11 are visible as "coming soon" cards with a teaser page.
+
+### Lesson flow
+
+1. **Theory** — Markdown rendered by `[components/strategy/theory-body.tsx](components/strategy/theory-body.tsx)`. The body is generated per user via `[lib/strategy/theory.ts](lib/strategy/theory.ts)` using the `STRATEGY_PROFESSOR_TEACHING_SYSTEM` prompt and the user's retrieved memories. Result is cached in `lesson_theory_cache (user_id, lesson_id)`.
+2. **Mini-game** — 4-6 short questions across four kinds:
+   - Multiple choice (4 options, plausible distractors)
+   - True / false
+   - Fill the missing step (ordered framework with one slot)
+   - Case scenario (1-2 sentence executive scenario; user writes a short answer judged against keyword targets)
+   Question generation is global (`lesson_questions` keyed by `lesson_id`); answer evaluation runs server-side at `POST /api/strategy/lessons/[id]/answer` with XP awarded per correct answer.
+3. **Complete lesson** — `POST /api/strategy/lessons/[id]/complete` marks `lesson_progress`, awards lesson XP (+50) and a `minigame_perfect` bonus (+25) on a flawless run, and bumps the user's streak in `streak_tracking`. The runner then routes to the next lesson or the module assignment.
+
+### End-of-module assignment
+
+Each module ends with a real executive-level brief (e.g. "diagnose a positioning failure"). The user submits at `POST /api/strategy/assignments/[id]/submit`. The grader (`[lib/strategy/grader.ts](lib/strategy/grader.ts)`, prompt `STRATEGY_ASSIGNMENT_GRADER_SYSTEM`) returns a structured review:
+
+- **score** (0-100)
+- **strengths**, **weaknesses**, **required_revisions**
+- **verdict** (`pass` if score ≥ 70 and no required revisions, else `revision`)
+- **feedback_md** — a 150-300-word personal note from the Professor
+- **skill_deltas** — applied via the same EMA path as Coach submissions
+
+Pass unlocks the next module (via `module_is_unlocked` RPC), awards `+300` XP for the assignment + `+150` XP for module completion, and inserts rows into `reward_unlocks` for each `module_rewards` entry on that module.
+
+### XP, rank, streak
+
+Logged in `xp_log`. A trigger recomputes `user_level (total_xp, level, rank)` after every insert. Ranks scale with thresholds:
+
+| Rank | XP threshold |
+| --- | --- |
+| Initiate | 0 |
+| Strategist | 500 |
+| Operator | 1,500 |
+| Director | 3,500 |
+| Growth Architect | 6,500 |
+| CMO Candidate | 10,500 |
+| Executive Operator | 16,000 |
+| CMO Ascendant | 25,000 |
+
+`streak_tracking` is bumped once per local day on lesson completion. Hitting a 7-day streak awards `+100` XP.
+
+### Rewards
+
+Module rewards are unlockable artifacts (kinds: `letter`, `template`, `quote_card`, `video`). They render in a cinematic reveal at `/strategy-lab/[trackSlug]/[moduleId]/reward` and carry a Professor-letter, a strategic worksheet, or a quote card. Video reward production is deferred.
+
+### Authoring
+
+`/admin/strategy` is the CMS. Pick a track, then edit:
+
+- Modules — title, summary, description, XP, drag-style ordering via the order field.
+- Lessons — title, learning objective, key points (one per line), minutes, XP. Each lesson exposes a **Regenerate caches** button that clears `lesson_theory_cache` (all users) and `lesson_questions` for that lesson, forcing a fresh AI run on next view.
+- Assignment — title, prompt, rubric (JSON), success criteria, max score.
+- Rewards — kind, title, description, content JSON.
+
+All writes go through server actions in `[app/(app)/admin/strategy/actions.ts](app/(app)/admin/strategy/actions.ts)` using the service-role client.
+
+---
+
 ## What's intentionally out of scope (for now)
 
 - Stripe / subscriptions
-- Real lessons inside P&L Lab and Strategy Lab (track shells only)
+- Real video reward content production (rewards are AI letters + templates + quote cards)
+- Drag-and-drop matching mini-game type (kept to 4 simpler kinds for MVP)
 - Notifications (UI badges only)
-- Background job runner — document processing runs inline in the request path
+- Background job runner — document processing and assignment grading run inline in the request path
 - Mobile-specific layouts beyond the responsive sidebar collapse
 
 These can each be slotted in without touching the core. The data model already supports them.

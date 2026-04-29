@@ -14,11 +14,18 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, avatar_url, role, weekly_streak, onboarded_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: levelRow }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name, avatar_url, role, weekly_streak, onboarded_at")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("user_level")
+      .select("rank, level, total_xp")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
   if (!profile?.onboarded_at) redirect("/onboarding");
 
@@ -34,6 +41,8 @@ export default async function AppLayout({
         weeklyStreak={profile?.weekly_streak ?? 0}
         role={profile?.role ?? "CMO in the Making"}
         isAdmin={userIsAdmin}
+        rank={levelRow?.rank ?? null}
+        level={levelRow?.level ?? null}
       />
       <main className="flex-1 min-w-0 flex flex-col">{children}</main>
     </div>
