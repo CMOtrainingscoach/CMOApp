@@ -3,20 +3,9 @@ import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
-/** Robust on Vercel Preview when env scopes are incomplete; trims accidental whitespace/quotes from dashboard copy-paste. */
-export function readSupabaseBrowserEnv(): { url: string; key: string } | null {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const rawKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-  const url = rawUrl.trim().replace(/^["']|["']$/g, "");
-  const key = rawKey.trim().replace(/^["']|["']$/g, "");
-  if (!url || !key) return null;
-  try {
-    new URL(url);
-  } catch {
-    return null;
-  }
-  return { url, key };
-}
+import { readSupabaseBrowserEnv } from "./env-public";
+
+export { readSupabaseBrowserEnv } from "./env-public";
 
 export async function createClient() {
   const env = readSupabaseBrowserEnv();

@@ -6,7 +6,11 @@ export async function middleware(request: NextRequest) {
     return await updateSupabaseSession(request);
   } catch (e) {
     console.error("[middleware] uncaught error:", e);
-    return NextResponse.next({ request });
+    try {
+      return NextResponse.next({ request });
+    } catch {
+      return NextResponse.next();
+    }
   }
 }
 
