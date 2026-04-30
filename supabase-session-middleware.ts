@@ -1,36 +1,61 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/** Edge-safe session refresh (cookies only). Kept at repo root so middleware does not pull `@/lib/supabase/*` into the Edge bundle analyzer. */
+/** Session refresh / auth gate. Kept at repo root so the Edge bundle does not pull `@/lib/supabase/*`. */
 export async function updateSupabaseSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(
-          cookiesToSet: {
-            name: string;
-            value: string;
-            options?: CookieOptions;
-          }[],
-        ) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
+  // Create-server-client throws without these — surface a clear deploy-time signal.
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return new NextResponse(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY — add both under Vercel → Project → Settings → Environment Variables, then redeploy.",
+      {
+        status: 503,
+        headers: {
+          "content-type": "text/plain;charset=utf-8",
         },
       },
+    );
+  }
+
+  let response = NextResponse.next({ request });
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(
+        cookiesToSet: {
+          name: string;
+          value: string;
+          options?: CookieOptions;
+        }[],
+        cacheHeaders?: Record<string, string>,
+      ) {
+        // Some Edge runtimes reject mutating `request.cookies` — cookies on `response` still reach the browser.
+        for (const { name, value } of cookiesToSet) {
+          try {
+            request.cookies.set(name, value);
+          } catch {
+            /* ignore — response.cookies carries the authoritative Set-Cookie */
+          }
+        }
+        response = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, options);
+        });
+        if (cacheHeaders) {
+          for (const [key, headerValue] of Object.entries(cacheHeaders)) {
+            if (typeof headerValue === "string") {
+              response.headers.set(key, headerValue);
+            }
+          }
+        }
+      },
     },
-  );
+  });
 
   const {
     data: { user },
