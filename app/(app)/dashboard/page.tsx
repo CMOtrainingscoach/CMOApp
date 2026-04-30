@@ -14,7 +14,7 @@ import {
 } from "@/components/dashboard/recent-activity";
 import { RecentDocuments } from "@/components/dashboard/recent-documents";
 import { QuoteBand } from "@/components/dashboard/quote-band";
-import type { SkillKey } from "@/types/database";
+import { normalizeSkillRows, overallFromSkillRows } from "@/lib/skill-progress";
 
 export const dynamic = "force-dynamic";
 
@@ -77,14 +77,10 @@ export default async function DashboardPage() {
 
   const displayName = profile?.display_name ?? user.email?.split("@")[0] ?? "Operator";
 
-  const skillRows = (skills ?? []) as { skill_key: SkillKey; score: number }[];
-  const overall = skillRows.length
-    ? Math.round(
-        skillRows.reduce((s, r) => s + r.score, 0) / skillRows.length,
-      )
-    : 50;
+  const skillRowsNormalized = normalizeSkillRows(skills ?? []);
+  const overall = overallFromSkillRows(skills ?? []);
 
-  const weakest = [...skillRows]
+  const weakest = [...skillRowsNormalized]
     .sort((a, b) => a.score - b.score)
     .slice(0, 2);
 
@@ -177,7 +173,10 @@ export default async function DashboardPage() {
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <YourProgress overall={overall} skills={skillRows} />
+            <YourProgress
+              overall={overall}
+              skills={skillRowsNormalized.slice(0, 5)}
+            />
             <CurrentTrack
               trackTitle={currentTrack?.title ?? "P&L and Business Finance"}
               trackDescription={

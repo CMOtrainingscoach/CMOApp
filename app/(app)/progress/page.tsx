@@ -3,6 +3,7 @@ import { Topbar } from "@/components/shell/topbar";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { SkillBar } from "@/components/ui/skill-bar";
+import { normalizeSkillRows, overallFromSkillRows } from "@/lib/skill-progress";
 import { SKILL_KEYS, SKILL_LABELS, type SkillKey } from "@/types/database";
 import { Flame, TrendingUp, Trophy, Target } from "lucide-react";
 
@@ -49,14 +50,11 @@ export default async function ProgressPage() {
         .limit(60),
     ]);
 
+  const skillsOrdered = normalizeSkillRows(skills ?? []);
   const skillsBy = new Map<SkillKey, number>(
-    (skills ?? []).map((s) => [s.skill_key as SkillKey, s.score]),
+    skillsOrdered.map((s) => [s.skill_key, s.score]),
   );
-  const overall = skillsBy.size
-    ? Math.round(
-        [...skillsBy.values()].reduce((s, v) => s + v, 0) / skillsBy.size,
-      )
-    : 50;
+  const overall = overallFromSkillRows(skills ?? []);
 
   // Streak heatmap data: 12 weeks
   const days = 84;
