@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sparkles, MessageCircle } from "lucide-react";
@@ -24,13 +23,12 @@ export function ProfessorCard({
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl">
           {avatarUrl ? (
             <>
-              <Image
+              <img
                 src={avatarUrl}
                 alt={name}
-                fill
-                sizes="(max-width: 1280px) 100vw, 300px"
-                className="object-cover object-top"
-                priority={false}
+                className="absolute inset-0 h-full w-full object-cover object-top"
+                loading="lazy"
+                decoding="async"
               />
               <div
                 className="absolute inset-0 pointer-events-none"
