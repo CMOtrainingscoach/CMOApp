@@ -57,9 +57,13 @@ export async function updateSupabaseSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: null | { id: string } = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data.user) user = data.user;
+  } catch (e) {
+    console.error("[middleware] supabase.auth.getUser failed — check .env.local and Supabase project:", e);
+  }
 
   const path = request.nextUrl.pathname;
   const isAuthRoute = path.startsWith("/login") || path.startsWith("/signup");
