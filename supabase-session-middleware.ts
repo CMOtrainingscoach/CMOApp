@@ -1,7 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function updateSession(request: NextRequest) {
+/** Edge-safe session refresh (cookies only). Kept at repo root so middleware does not pull `@/lib/supabase/*` into the Edge bundle analyzer. */
+export async function updateSupabaseSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -13,7 +14,11 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(
-          cookiesToSet: { name: string; value: string; options?: CookieOptions }[],
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options?: CookieOptions;
+          }[],
         ) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
