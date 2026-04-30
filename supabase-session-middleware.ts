@@ -19,43 +19,66 @@ export async function updateSupabaseSession(request: NextRequest) {
     );
   }
 
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+  try {
+    // Throws on malformed URLs; avoids opaque Edge crashes.
+    new URL(supabaseUrl);
+  } catch {
+    return new NextResponse(
+      "Invalid NEXT_PUBLIC_SUPABASE_URL — must be an absolute URL (check Vercel env for quotes or stray newlines).",
+      {
+        status: 503,
+        headers: { "content-type": "text/plain;charset=utf-8" },
       },
-      setAll(
-        cookiesToSet: {
-          name: string;
-          value: string;
-          options?: CookieOptions;
-        }[],
-        cacheHeaders?: Record<string, string>,
-      ) {
-        // Some Edge runtimes reject mutating `request.cookies` — cookies on `response` still reach the browser.
-        for (const { name, value } of cookiesToSet) {
-          try {
-            request.cookies.set(name, value);
-          } catch {
-            /* ignore — response.cookies carries the authoritative Set-Cookie */
-          }
-        }
-        response = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, options);
-        });
-        if (cacheHeaders) {
-          for (const [key, headerValue] of Object.entries(cacheHeaders)) {
-            if (typeof headerValue === "string") {
-              response.headers.set(key, headerValue);
+    );
+  }
+
+  let supabaseResponse = NextResponse.next({ request });
+
+  let supabase: ReturnType<typeof createServerClient>;
+  try {
+    supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(
+          cookiesToSet: {
+            name: string;
+            value: string;
+            options?: CookieOptions;
+          }[],
+          cacheHeaders?: Record<string, string>,
+        ) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            try {
+              request.cookies.set(name, value);
+            } catch {
+              /* Edge may forbid mutating request.cookies — response cookies still apply */
+            }
+            try {
+              supabaseResponse.cookies.set(name, value, options);
+            } catch (e) {
+              console.error("[middleware] cookie set failed:", name, e);
+            }
+          });
+          if (cacheHeaders) {
+            for (const [key, headerValue] of Object.entries(cacheHeaders)) {
+              if (typeof headerValue === "string") {
+                try {
+                  supabaseResponse.headers.set(key, headerValue);
+                } catch {
+                  /* ignore */
+                }
+              }
             }
           }
-        }
+        },
       },
-    },
-  });
+    });
+  } catch (e) {
+    console.error("[middleware] createServerClient failed:", e);
+    return NextResponse.next({ request });
+  }
 
   let user: null | { id: string } = null;
   try {
@@ -87,5 +110,5 @@ export async function updateSupabaseSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return supabaseResponse;
 }
