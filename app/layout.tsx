@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
+
+import { SupabaseSessionRefresher } from "@/components/supabase/session-refresher";
 import "./globals.css";
 
 const sans = Inter({
@@ -34,7 +36,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${sans.variable} ${display.variable} ${mono.variable}`}>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased">
+        <SupabaseSessionRefresher />
+        {children}
+      </body>
     </html>
   );
 }
