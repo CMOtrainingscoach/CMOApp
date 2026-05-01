@@ -21,7 +21,7 @@ export default async function ProfessorPage() {
         .maybeSingle(),
       supabase
         .from("chat_conversations")
-        .select("id, title, updated_at")
+        .select("id, title, updated_at, kind")
         .eq("user_id", user.id)
         .order("updated_at", { ascending: false })
         .limit(30),

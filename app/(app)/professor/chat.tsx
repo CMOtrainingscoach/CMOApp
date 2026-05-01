@@ -14,6 +14,7 @@ import {
   Sparkles,
   Loader2,
   MessageSquare,
+  Trash2,
 } from "lucide-react";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -54,6 +55,7 @@ type Conversation = {
   id: string;
   title: string | null;
   updated_at: string;
+  kind: string | null;
 };
 
 type StoredMessage = {
@@ -82,11 +84,23 @@ export function ProfessorChat({
   professorAvatarUrl?: string | null;
 }) {
   const router = useRouter();
+  const [convList, setConvList] = useState(conversations);
   const [activeId, setActiveId] = useState<string | null>(
     conversations[0]?.id ?? null,
   );
   const [history, setHistory] = useState<StoredMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setConvList(conversations);
+  }, [conversations]);
+
+  useEffect(() => {
+    if (activeId !== null && !convList.some((c) => c.id === activeId)) {
+      setActiveId(convList[0]?.id ?? null);
+    }
+  }, [convList, activeId]);
 
   const initialMessages = useMemo(
     () =>
@@ -159,6 +173,42 @@ export function ProfessorChat({
     setMessages([]);
   }
 
+  async function deleteConversation(id: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (
+      !window.confirm(
+        "Delete this conversation and all its messages? This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("chat_conversations")
+        .delete()
+        .eq("id", id);
+      if (error) {
+        window.alert(error.message ?? "Could not delete conversation.");
+        return;
+      }
+      setConvList((prev) => prev.filter((c) => c.id !== id));
+      if (activeId === id) {
+        setActiveId(null);
+        setHistory([]);
+        setMessages([]);
+      }
+      router.refresh();
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const canDelete = (c: Conversation) =>
+    (c.kind ?? "general") !== "onboarding";
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 h-[calc(100vh-160px)]">
       {/* Conversations rail */}
@@ -189,24 +239,47 @@ export function ProfessorChat({
               <Sparkles className="size-3.5" /> New conversation
             </div>
           </button>
-          {conversations.map((c) => (
-            <button
+          {convList.map((c) => (
+            <div
               key={c.id}
-              onClick={() => setActiveId(c.id)}
               className={cn(
-                "w-full text-left px-3 py-2 rounded-lg transition-colors",
+                "group mb-1 flex rounded-lg border transition-colors",
                 activeId === c.id
-                  ? "bg-gradient-gold-soft border border-border-gold"
-                  : "hover:bg-white/[0.03] border border-transparent",
+                  ? "border-border-gold bg-gradient-gold-soft"
+                  : "border-transparent hover:bg-white/[0.03]",
               )}
             >
-              <div className="text-sm text-text-primary truncate">
-                {c.title || "Untitled session"}
-              </div>
-              <div className="text-[10px] text-text-muted mt-0.5">
-                {timeAgo(c.updated_at)}
-              </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveId(c.id)}
+                className="min-w-0 flex-1 px-3 py-2 text-left"
+              >
+                <div className="truncate text-sm text-text-primary">
+                  {c.title || "Untitled session"}
+                </div>
+                <div className="mt-0.5 text-[10px] text-text-muted">
+                  {timeAgo(c.updated_at)}
+                </div>
+              </button>
+              {canDelete(c) && (
+                <button
+                  type="button"
+                  disabled={deletingId === c.id}
+                  onClick={(e) => deleteConversation(c.id, e)}
+                  className={cn(
+                    "shrink-0 rounded-md px-2 text-text-muted transition-colors hover:bg-black/25 hover:text-danger",
+                    "opacity-0 group-hover:opacity-100 lg:opacity-80 lg:group-hover:opacity-100 focus:opacity-100",
+                  )}
+                  aria-label={`Delete conversation: ${c.title || "Untitled"}`}
+                >
+                  {deletingId === c.id ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : (
+                    <Trash2 className="size-4" aria-hidden strokeWidth={1.6} />
+                  )}
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </Card>
