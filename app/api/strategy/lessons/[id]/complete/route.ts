@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { getContentLabSlugForLessonId } from "@/lib/strategy/lab-slug";
 import { awardXp, bumpStreak, XP_AMOUNTS } from "@/lib/strategy/xp";
 
 export const maxDuration = 30;
@@ -54,6 +55,8 @@ export async function POST(
     { onConflict: "user_id,lesson_id" },
   );
 
+  const labSlug = await getContentLabSlugForLessonId(lessonId);
+
   // Only award lesson XP the first time it's completed
   let xp_awarded = 0;
   if (!wasCompleted) {
@@ -63,6 +66,7 @@ export async function POST(
       source: "lesson_complete",
       amount: lessonXp,
       refId: lessonId,
+      labSlug,
     });
     xp_awarded += lessonXp;
     if (score >= 100) {
@@ -71,6 +75,7 @@ export async function POST(
         source: "minigame_perfect",
         amount: XP_AMOUNTS.minigame_perfect,
         refId: lessonId,
+        labSlug,
       });
       xp_awarded += XP_AMOUNTS.minigame_perfect;
     }

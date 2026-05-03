@@ -9,9 +9,16 @@ type Props = {
   assignmentId: string;
   trackSlug: string;
   moduleId: string;
+  /** Base path without trailing slash, e.g. `/strategy-lab` or `/pl-lab` */
+  labBasePath?: string;
 };
 
-export function AssignmentForm({ assignmentId, trackSlug, moduleId }: Props) {
+export function AssignmentForm({
+  assignmentId,
+  trackSlug,
+  moduleId,
+  labBasePath = "/strategy-lab",
+}: Props) {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +47,7 @@ export function AssignmentForm({ assignmentId, trackSlug, moduleId }: Props) {
         setError(data.error);
         return;
       }
-      router.push(`/strategy-lab/${trackSlug}/${moduleId}/review`);
+      router.push(`${labBasePath}/${trackSlug}/${moduleId}/review`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Submission failed");
     } finally {
@@ -60,7 +67,7 @@ export function AssignmentForm({ assignmentId, trackSlug, moduleId }: Props) {
       </div>
       <p className="text-sm text-text-muted leading-relaxed">
         Write directly. Use frameworks. Be specific. The Professor reads this as
-        if it landed on a board's desk.
+        if it landed on a board&apos;s desk.
       </p>
       <textarea
         rows={14}

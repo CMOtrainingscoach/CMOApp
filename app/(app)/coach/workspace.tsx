@@ -26,6 +26,7 @@ import {
   setTaskStatus,
 } from "./actions";
 import { cn, timeAgo } from "@/lib/utils";
+import type { Json } from "@/types/database";
 
 type Task = {
   id: string;
@@ -38,6 +39,7 @@ type Task = {
   feedback: any;
   deadline: string | null;
   created_at: string;
+  metadata: Json | null;
 };
 
 type Reflection = {
@@ -267,6 +269,14 @@ function TaskRow({ task }: { task: Task }) {
   const [open, setOpen] = useState(false);
   const [, startStatus] = useTransition();
   const done = task.status === "completed" || task.status === "reviewed";
+  const meta =
+    task.metadata !== null &&
+    typeof task.metadata === "object" &&
+    !Array.isArray(task.metadata)
+      ? (task.metadata as { kind?: string })
+      : null;
+  const isReadingTask =
+    task.category === "module_reading" || meta?.kind === "module_reading";
 
   async function submit() {
     if (submission.trim().length < 20) return;
@@ -316,7 +326,7 @@ function TaskRow({ task }: { task: Task }) {
             </div>
             <div className="text-[11px] text-text-muted mt-0.5">
               {task.category ?? "general"} • {timeAgo(task.created_at)}
-              {task.score != null && (
+              {task.score != null && !isReadingTask && (
                 <span className="ml-2 text-gold-300">Score {task.score}</span>
               )}
             </div>
@@ -328,7 +338,13 @@ function TaskRow({ task }: { task: Task }) {
             size="sm"
             onClick={() => setOpen((o) => !o)}
           >
-            {open ? "Close" : task.feedback ? "View feedback" : "Submit"}
+            {open
+              ? "Close"
+              : isReadingTask
+                ? "Details"
+                : task.feedback
+                  ? "View feedback"
+                  : "Submit"}
           </Button>
           <button
             onClick={() => startStatus(() => deleteTask(task.id))}
@@ -347,7 +363,12 @@ function TaskRow({ task }: { task: Task }) {
               {task.description}
             </p>
           )}
-          {task.feedback ? (
+          {isReadingTask ? (
+            <p className="text-[11px] text-text-muted">
+              Tick the checkbox above when you&apos;ve finished reading. XP is
+              granted once per book.
+            </p>
+          ) : task.feedback ? (
             <div className="space-y-2 text-sm">
               <Section title="Strengths" items={task.feedback.strengths ?? []} />
               <Section title="Gaps" items={task.feedback.gaps ?? []} />

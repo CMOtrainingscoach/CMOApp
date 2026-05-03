@@ -11,9 +11,12 @@ export const dynamic = "force-dynamic";
 export default async function StrategyAdminIndex({
   searchParams,
 }: {
-  searchParams: Promise<{ track?: string }>;
+  searchParams: Promise<{ track?: string; lab?: string }>;
 }) {
-  const { track: selectedSlug } = await searchParams;
+  const { track: selectedSlug, lab: labRaw } = await searchParams;
+  const contentLab = labRaw === "pl" ? ("pl" as const) : ("strategy" as const);
+  const cmsTitle = contentLab === "pl" ? "P&L Lab CMS" : "Strategy Lab CMS";
+
   const adminUser = await requireAdmin();
   const supabase = await createClient();
   const admin = createServiceRoleClient();
@@ -27,6 +30,7 @@ export default async function StrategyAdminIndex({
     admin
       .from("strategy_tracks")
       .select("id, slug, title, tagline, ord, is_active")
+      .eq("lab_slug", contentLab)
       .order("ord", { ascending: true }),
   ]);
 
@@ -37,7 +41,9 @@ export default async function StrategyAdminIndex({
       <Topbar
         displayName={profile?.display_name ?? "Admin"}
         avatarUrl={profile?.avatar_url}
-        subtitle="Strategy Lab content authoring."
+        subtitle={
+          contentLab === "pl" ? "P&L Lab content authoring." : "Strategy Lab content authoring."
+        }
       />
       <div className="px-6 lg:px-8 pb-12 space-y-6">
         <Link
@@ -47,9 +53,33 @@ export default async function StrategyAdminIndex({
           <ArrowLeft className="size-3.5" /> Admin
         </Link>
 
-        <header className="max-w-3xl">
+        <header className="max-w-3xl space-y-4">
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/strategy?lab=strategy"
+              className={`rounded-xl border px-4 py-2 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                contentLab === "strategy"
+                  ? "border-gold-500/60 bg-gold-500/[0.08] text-gold-200"
+                  : "border-border-subtle text-text-muted hover:border-border-gold"
+              }`}
+            >
+              Strategy Lab
+            </Link>
+            <Link
+              href="/admin/strategy?lab=pl"
+              className={`rounded-xl border px-4 py-2 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                contentLab === "pl"
+                  ? "border-emerald-500/50 bg-emerald-500/[0.08] text-emerald-100"
+                  : "border-border-subtle text-text-muted hover:border-border-gold"
+              }`}
+            >
+              P&amp;L Lab
+            </Link>
+          </div>
+
+          <div>
           <span className="badge-gold inline-flex items-center gap-1">
-            <BookOpen className="size-3" /> Strategy Lab CMS
+            <BookOpen className="size-3" /> {cmsTitle}
           </span>
           <h1 className="mt-3 font-display text-4xl tracking-tight gold-text">
             Author the curriculum.
@@ -58,6 +88,7 @@ export default async function StrategyAdminIndex({
             Pick a track, edit modules, lessons, the end-of-module assignment,
             and the reward. Theory and mini-games regenerate on demand.
           </p>
+          </div>
         </header>
 
         <Card>
@@ -71,7 +102,7 @@ export default async function StrategyAdminIndex({
                 return (
                   <li key={t.id as string}>
                     <Link
-                      href={`/admin/strategy?track=${t.slug}`}
+                      href={`/admin/strategy?lab=${contentLab}&track=${encodeURIComponent(t.slug as string)}`}
                       className={`block rounded-xl border px-4 py-3 transition-all ${
                         isSel
                           ? "border-gold-500/60 bg-gold-500/[0.08]"
@@ -149,6 +180,58 @@ async function TrackEditor({
         ])
       : [{ data: [] }, { data: [] }, { data: [] }];
 
+  let booksRows: {
+    id: string;
+    module_id: string;
+    ord: number;
+    title: string;
+    author: string | null;
+    url: string | null;
+    notes: string | null;
+    xp_reward: number;
+  }[] = [];
+  if (moduleIds.length > 0) {
+    const br = await admin
+      .from("strategy_module_books")
+      .select("id, module_id, ord, title, author, url, notes, xp_reward")
+      .in("module_id", moduleIds)
+      .order("ord", { ascending: true });
+    if (br.error) {
+      console.error(
+        "[admin/TrackEditor] strategy_module_books:",
+        br.error.message,
+      );
+    } else {
+      booksRows = (br.data ?? []) as typeof booksRows;
+    }
+  }
+
+  const moduleBooksById: Record<
+    string,
+    {
+      id: string;
+      ord: number;
+      title: string;
+      author: string | null;
+      url: string | null;
+      notes: string | null;
+      xp_reward: number;
+    }[]
+  > = {};
+  for (const b of booksRows) {
+    const mid = b.module_id as string;
+    if (!moduleBooksById[mid]) moduleBooksById[mid] = [];
+    moduleBooksById[mid].push({
+      id: b.id as string,
+      ord: b.ord as number,
+      title: b.title as string,
+      author: (b.author as string | null) ?? null,
+      url: (b.url as string | null) ?? null,
+      notes: (b.notes as string | null) ?? null,
+      xp_reward: (b.xp_reward as number) ?? 25,
+    });
+  }
+
   return (
     <TrackEditorClient
       trackId={trackId}
@@ -190,6 +273,7 @@ async function TrackEditor({
         description: (r.description as string | null) ?? "",
         content: (r.content as Record<string, unknown> | null) ?? {},
       }))}
+      moduleBooksById={moduleBooksById}
     />
   );
 }

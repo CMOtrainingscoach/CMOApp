@@ -18,13 +18,16 @@ type Props = {
   lessonTitle: string;
   moduleTitle: string;
   heroImageUrl: string | null;
-  /** Rendered immediately under {@link LessonHeroBanner} when hero is shown (e.g. "What you'll master"). */
   learningObjectiveBelowHero?: ReactNode;
   trackSlug: string;
   moduleId: string;
   nextLessonId: string | null;
   theoryMd: string;
   questions: RunnerQuestion[];
+  /** e.g. `/strategy-lab` or `/pl-lab` — used for post-completion navigation */
+  labBasePath: string;
+  /** Sidebar copy below "Operator's note" on the theory step */
+  operatorAsideNote?: string;
 };
 
 export function LessonRunner({
@@ -38,6 +41,8 @@ export function LessonRunner({
   nextLessonId,
   theoryMd,
   questions,
+  labBasePath,
+  operatorAsideNote = "Strategy is the discipline of choosing where not to play. Every lesson is a chance to practise that choice.",
 }: Props) {
   const router = useRouter();
   const [stage, setStage] = useState<Stage>("theory");
@@ -47,6 +52,9 @@ export function LessonRunner({
     total: number;
   } | null>(null);
   const [completing, setCompleting] = useState(false);
+
+  const path = (suffix: string) =>
+    `${labBasePath}/${trackSlug}/${moduleId}${suffix}`;
 
   const onChallengeComplete = (s: {
     totalXp: number;
@@ -84,22 +92,22 @@ export function LessonRunner({
 
       if (!res.ok) {
         if (next) {
-          router.push(`/strategy-lab/${trackSlug}/${moduleId}/${next}`);
+          router.push(path(`/${next}`));
         } else {
-          router.push(`/strategy-lab/${trackSlug}`);
+          router.push(`${labBasePath}/${trackSlug}`);
         }
         return;
       }
 
       if (data.is_last_lesson) {
-        router.push(`/strategy-lab/${trackSlug}/${moduleId}/assignment`);
+        router.push(path("/assignment"));
         return;
       }
       if (next) {
-        router.push(`/strategy-lab/${trackSlug}/${moduleId}/${next}`);
+        router.push(path(`/${next}`));
         return;
       }
-      router.push(`/strategy-lab/${trackSlug}`);
+      router.push(`${labBasePath}/${trackSlug}`);
     } finally {
       setCompleting(false);
     }
@@ -118,30 +126,30 @@ export function LessonRunner({
           )}
           {learningObjectiveBelowHero}
           <div className="card-premium p-6 sm:p-10">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300 mb-4">
-            <BookOpen className="size-3.5" />
-            Theory
+            <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300 mb-4">
+              <BookOpen className="size-3.5" />
+              Theory
+            </div>
+            <TheoryBody markdown={theoryMd} />
+            <div className="mt-10 flex items-center justify-between gap-4">
+              <p className="text-sm text-text-muted max-w-md">
+                Read it twice. The challenge tests application, not recall.
+              </p>
+              <Button
+                variant="gold"
+                onClick={() => setStage("challenge")}
+                size="lg"
+              >
+                Continue to challenge
+                <ArrowRight className="size-4" />
+              </Button>
+            </div>
           </div>
-          <TheoryBody markdown={theoryMd} />
-          <div className="mt-10 flex items-center justify-between gap-4">
-            <p className="text-sm text-text-muted max-w-md">
-              Read it twice. The challenge tests application, not recall.
-            </p>
-            <Button
-              variant="gold"
-              onClick={() => setStage("challenge")}
-              size="lg"
-            >
-              Continue to challenge
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        </div>
         </div>
         <aside className="space-y-3">
           <div className="card-premium p-5">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300">
-              <Target className="size-3.5" /> What's next
+              <Target className="size-3.5" /> What&apos;s next
             </div>
             <ol className="mt-3 space-y-2 text-sm text-text-secondary">
               <li className="flex items-start gap-2">
@@ -166,11 +174,10 @@ export function LessonRunner({
           </div>
           <div className="card-premium p-5">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300">
-              <Sparkles className="size-3.5" /> Operator's note
+              <Sparkles className="size-3.5" /> Operator&apos;s note
             </div>
             <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-              Strategy is the discipline of choosing where not to play. Every
-              lesson is a chance to practise that choice.
+              {operatorAsideNote}
             </p>
           </div>
         </aside>
@@ -204,7 +211,7 @@ export function LessonRunner({
             <ul className="mt-3 space-y-2 text-sm text-text-secondary leading-relaxed">
               <li>Submit your answer. The Professor explains either way.</li>
               <li>Bonus XP for a perfect run.</li>
-              <li>Don't rush. Read the prompt twice.</li>
+              <li>Don&apos;t rush. Read the prompt twice.</li>
             </ul>
           </div>
         </aside>
@@ -212,7 +219,6 @@ export function LessonRunner({
     );
   }
 
-  // complete
   return (
     <div className="max-w-3xl mx-auto">
       {summary && (

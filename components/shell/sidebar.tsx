@@ -126,7 +126,7 @@ export function Sidebar({
       <div className="px-3 pb-3 space-y-2">
         {rank && (
           <Link
-            href="/strategy-lab/progress"
+            href="/progress"
             className="card-premium p-4 block hover:border-border-gold transition-colors"
           >
             <div className="flex items-center justify-between mb-1">
@@ -143,7 +143,7 @@ export function Sidebar({
               {rank}
             </div>
             <div className="mt-1 text-[10px] text-text-muted leading-tight">
-              Strategy Lab progression
+              Overall · all labs combined
             </div>
           </Link>
         )}

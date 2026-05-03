@@ -2,8 +2,9 @@ import "server-only";
 import { z } from "zod";
 import { generateObject } from "ai";
 import { openaiProvider, CHAT_MODEL } from "@/lib/openai";
-import { STRATEGY_MINIGAME_GENERATOR_SYSTEM } from "@/lib/prompts";
+import { minigameGeneratorSystemForLab } from "@/lib/prompts";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import type { ContentLabSlug } from "@/lib/strategy/lab-slug";
 
 const QuestionKindEnum = z.enum([
   "multiple_choice",
@@ -105,6 +106,7 @@ export type MinigameResult = {
 /** Ensures a minigame exists for a lesson (global). Returns sanitized questions (without correct answers). */
 export async function getOrGenerateMinigame(
   lessonId: string,
+  lab: ContentLabSlug = "strategy",
 ): Promise<MinigameResult> {
   const admin = createServiceRoleClient();
 
@@ -163,7 +165,7 @@ export async function getOrGenerateMinigame(
       const { object } = await generateObject({
         model: openaiProvider(CHAT_MODEL),
         schema: MinigameSchema,
-        system: STRATEGY_MINIGAME_GENERATOR_SYSTEM,
+        system: minigameGeneratorSystemForLab(lab),
         prompt: `LESSON
 Title: ${lesson.title}
 Learning objective: ${lesson.learning_objective ?? "(not specified)"}

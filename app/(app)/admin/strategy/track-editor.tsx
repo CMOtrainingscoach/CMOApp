@@ -9,6 +9,8 @@ import {
   ScrollText,
   Award,
   Loader2,
+  BookMarked,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +22,7 @@ import {
   regenerateLessonCaches,
   upsertAssignment,
   upsertReward,
+  replaceModuleBooks,
 } from "./actions";
 import { LessonHeroUploader } from "./lesson-hero-uploader";
 
@@ -61,6 +64,16 @@ type RewardT = {
   content: Record<string, unknown>;
 };
 
+type ModuleBookRowT = {
+  id: string;
+  ord: number;
+  title: string;
+  author: string | null;
+  url: string | null;
+  notes: string | null;
+  xp_reward: number;
+};
+
 export function TrackEditorClient({
   trackId,
   trackTitle,
@@ -68,6 +81,7 @@ export function TrackEditorClient({
   lessons,
   assignments,
   rewards,
+  moduleBooksById,
 }: {
   trackId: string;
   trackTitle: string;
@@ -75,6 +89,7 @@ export function TrackEditorClient({
   lessons: LessonT[];
   assignments: AssignmentT[];
   rewards: RewardT[];
+  moduleBooksById: Record<string, ModuleBookRowT[]>;
 }) {
   const [activeModuleId, setActiveModuleId] = useState<string | null>(
     modules[0]?.id ?? null,
@@ -133,6 +148,10 @@ export function TrackEditorClient({
           <RewardsBlock
             module={activeModule}
             rewards={rewards.filter((r) => r.module_id === activeModule.id)}
+          />
+          <BooksBlock
+            module={activeModule}
+            books={moduleBooksById[activeModule.id] ?? []}
           />
         </>
       )}
@@ -665,6 +684,209 @@ function AssignmentBlock({
       </CardBody>
     </Card>
   );
+}
+
+function BooksBlock({
+  module,
+  books,
+}: {
+  module: ModuleT;
+  books: ModuleBookRowT[];
+}) {
+  const fp = JSON.stringify(
+    books.map((b) => [b.ord, b.title, b.author, b.url, b.notes, b.xp_reward]),
+  );
+  const [open, setOpen] = useState(true);
+  const [rows, setRows] = useState<ModuleBookDraft[]>(() =>
+    rowToDrafts(books),
+  );
+  const [pending, start] = useTransition();
+
+  useEffect(() => {
+    setRows(rowToDrafts(books));
+  }, [module.id, fp]);
+
+  const save = () => {
+    const payload = rows
+      .map((r) => ({
+        title: r.title.trim(),
+        author: r.author.trim() ? r.author.trim() : null,
+        url: r.url.trim() ? r.url.trim() : null,
+        notes: r.notes.trim() ? r.notes.trim() : null,
+        xp_reward: Math.min(500, Math.max(0, r.xp_reward || 0)),
+      }))
+      .filter((r) => r.title.length > 0);
+    start(async () => {
+      await replaceModuleBooks(module.id, payload);
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BookMarked className="size-3.5" /> Books to read · {module.title}
+          </CardTitle>
+          <ChevronDown
+            className={`size-4 shrink-0 text-text-muted transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+      </CardHeader>
+      {open && (
+        <CardBody className="space-y-3 pt-0">
+          {rows.length === 0 && (
+            <p className="text-sm text-text-muted italic">
+              No books yet. Add curated reading for this module.
+            </p>
+          )}
+          {rows.map((row, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-border-subtle bg-white/[0.02] p-4 space-y-3"
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block sm:col-span-2">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                    Title *
+                  </span>
+                  <input
+                    className="input-field"
+                    placeholder="Book title"
+                    value={row.title}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...next[i], title: e.target.value };
+                      setRows(next);
+                    }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                    Author
+                  </span>
+                  <input
+                    className="input-field"
+                    placeholder="Optional"
+                    value={row.author}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...next[i], author: e.target.value };
+                      setRows(next);
+                    }}
+                  />
+                </label>
+                <NumberField
+                  label="XP reward"
+                  value={row.xp_reward}
+                  onChange={(n) => {
+                    const next = [...rows];
+                    next[i] = { ...next[i], xp_reward: n };
+                    setRows(next);
+                  }}
+                />
+                <label className="block sm:col-span-2">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                    URL
+                  </span>
+                  <input
+                    className="input-field"
+                    placeholder="https://…"
+                    value={row.url}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...next[i], url: e.target.value };
+                      setRows(next);
+                    }}
+                  />
+                </label>
+                <label className="block sm:col-span-2">
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                    Curator notes
+                  </span>
+                  <textarea
+                    className="input-field"
+                    rows={2}
+                    placeholder="Why read this…"
+                    value={row.notes}
+                    onChange={(e) => {
+                      const next = [...rows];
+                      next[i] = { ...next[i], notes: e.target.value };
+                      setRows(next);
+                    }}
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-400"
+                  onClick={() =>
+                    setRows(rows.filter((_, idx) => idx !== i))
+                  }
+                >
+                  <Trash2 className="size-3.5" /> Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                setRows([
+                  ...rows,
+                  {
+                    title: "",
+                    author: "",
+                    url: "",
+                    notes: "",
+                    xp_reward: 25,
+                  },
+                ])
+              }
+            >
+              <Plus className="size-3.5" /> Add book
+            </Button>
+            <Button variant="gold" size="sm" onClick={save} disabled={pending}>
+              {pending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
+              Save books
+            </Button>
+          </div>
+        </CardBody>
+      )}
+    </Card>
+  );
+}
+
+type ModuleBookDraft = {
+  title: string;
+  author: string;
+  url: string;
+  notes: string;
+  xp_reward: number;
+};
+
+function rowToDrafts(rows: ModuleBookRowT[]): ModuleBookDraft[] {
+  return [...rows]
+    .sort((a, b) => a.ord - b.ord)
+    .map((b) => ({
+      title: b.title,
+      author: b.author ?? "",
+      url: b.url ?? "",
+      notes: b.notes ?? "",
+      xp_reward: b.xp_reward,
+    }));
 }
 
 function RewardsBlock({

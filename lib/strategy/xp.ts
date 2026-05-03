@@ -1,4 +1,5 @@
 import "server-only";
+import type { ContentLabSlug, XpLabSlug } from "./lab-slug";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export type XpSource =
@@ -7,7 +8,8 @@ export type XpSource =
   | "minigame_perfect"
   | "assignment_pass"
   | "module_complete"
-  | "streak_week";
+  | "streak_week"
+  | "reading_complete";
 
 export const XP_AMOUNTS: Record<XpSource, number> = {
   lesson_complete: 50,
@@ -16,6 +18,7 @@ export const XP_AMOUNTS: Record<XpSource, number> = {
   assignment_pass: 300,
   module_complete: 150,
   streak_week: 100,
+  reading_complete: 25,
 };
 
 export type Rank =
@@ -82,18 +85,22 @@ export type AwardOpts = {
   source: XpSource | string;
   amount?: number;
   refId?: string | null;
+  /** Attribution for per-lab XP; defaults to Strategy Lab legacy behavior. Use `shared` for cross-lab streak XP. */
+  labSlug?: XpLabSlug;
 };
 
-/** Logs an XP event. The DB trigger recomputes user_level (total/level/rank). */
+/** Logs an XP event. The DB trigger recomputes user_lab_level and overall user_level. */
 export async function awardXp(opts: AwardOpts) {
   const amount = opts.amount ?? XP_AMOUNTS[opts.source as XpSource];
   if (!amount || amount === 0) return;
+  const labSlug = opts.labSlug ?? "strategy";
   const admin = createServiceRoleClient();
   await admin.from("xp_log").insert({
     user_id: opts.userId,
     source: opts.source,
     source_ref_id: opts.refId ?? null,
     xp_delta: amount,
+    lab_slug: labSlug,
   });
 }
 
@@ -144,7 +151,7 @@ export async function bumpStreak(userId: string) {
     .eq("user_id", userId);
 
   if (nextStreak > 0 && nextStreak % 7 === 0) {
-    await awardXp({ userId, source: "streak_week" });
+    await awardXp({ userId, source: "streak_week", labSlug: "shared" });
   }
 }
 
@@ -159,13 +166,51 @@ export type UserLevelSnapshot = {
   next_rank: Rank | null;
 };
 
-export async function getUserLevel(userId: string): Promise<UserLevelSnapshot> {
+export async function getOverallUserLevel(
+  userId: string,
+): Promise<UserLevelSnapshot> {
   const admin = createServiceRoleClient();
   const [{ data: lvl }, { data: streak }] = await Promise.all([
     admin
       .from("user_level")
       .select("total_xp, level, rank")
       .eq("user_id", userId)
+      .maybeSingle(),
+    admin
+      .from("streak_tracking")
+      .select("current_streak, longest_streak")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  const totalXp = lvl?.total_xp ?? 0;
+  const prog = progressToNextRank(totalXp);
+  return {
+    total_xp: totalXp,
+    level: lvl?.level ?? levelFor(totalXp),
+    rank: (lvl?.rank as Rank) ?? "Initiate",
+    current_streak: streak?.current_streak ?? 0,
+    longest_streak: streak?.longest_streak ?? 0,
+    pct_to_next: prog.pct,
+    remaining_to_next: prog.remaining,
+    next_rank: (prog.rank.next as Rank) ?? null,
+  };
+}
+
+/** @deprecated Prefer {@link getOverallUserLevel}; same behavior. */
+export const getUserLevel = getOverallUserLevel;
+
+/** Per-lab XP snapshot (strategy / pl / …). Excludes labs the user has not touched. */
+export async function getLabUserLevel(
+  userId: string,
+  labSlug: ContentLabSlug | "shared",
+): Promise<UserLevelSnapshot> {
+  const admin = createServiceRoleClient();
+  const [{ data: lvl }, { data: streak }] = await Promise.all([
+    admin
+      .from("user_lab_level")
+      .select("total_xp, level, rank")
+      .eq("user_id", userId)
+      .eq("lab_slug", labSlug)
       .maybeSingle(),
     admin
       .from("streak_tracking")

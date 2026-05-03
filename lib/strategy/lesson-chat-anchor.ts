@@ -37,11 +37,13 @@ export async function loadStrategyLessonAnchor(
 
   const { data: track } = await admin
     .from("strategy_tracks")
-    .select("title")
+    .select("title, lab_slug")
     .eq("id", mod.track_id as string)
     .maybeSingle();
 
   const trackTitle = (track?.title as string) ?? "Strategy Lab";
+  const labLabel =
+    track?.lab_slug === "pl" ? "P&L Lab" : "Strategy Lab";
   const moduleTitle = (mod.title as string) ?? "Module";
   const points = keyPointsArray(lesson.key_points);
 
@@ -60,7 +62,7 @@ export async function loadStrategyLessonAnchor(
       }`
     : "\n\n(Theory cache not loaded yet — ground answers in the objective and key points.)";
 
-  const anchor = `STRATEGY LAB — CURRENT LESSON (ground the student here; do not invent other lessons' content)
+  const anchor = `${labLabel.toUpperCase()} — CURRENT LESSON (ground the student here; do not invent other lessons' content)
 Track: ${trackTitle}
 Module: ${moduleTitle}
 Lesson: ${lesson.title}
@@ -76,6 +78,6 @@ Instructions: You are helping this student go deeper on THIS lesson only. Tie an
 
   return {
     anchor,
-    conversationTitleBase: `Strategy Lab · ${lesson.title as string}`.slice(0, 120),
+    conversationTitleBase: `${labLabel} · ${lesson.title as string}`.slice(0, 120),
   };
 }

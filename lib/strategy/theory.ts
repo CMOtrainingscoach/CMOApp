@@ -1,9 +1,10 @@
 import "server-only";
 import { generateText } from "ai";
 import { openaiProvider, CHAT_MODEL } from "@/lib/openai";
-import { STRATEGY_PROFESSOR_TEACHING_SYSTEM } from "@/lib/prompts";
+import { professorTeachingSystemForLab } from "@/lib/prompts";
 import { retrieveContext, renderRetrievedContext } from "@/lib/memory";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import type { ContentLabSlug } from "@/lib/strategy/lab-slug";
 
 type LessonRow = {
   id: string;
@@ -37,6 +38,7 @@ export type TheoryResult = {
 export async function getOrGenerateTheory(
   userId: string,
   lessonId: string,
+  lab: ContentLabSlug = "strategy",
 ): Promise<TheoryResult> {
   const admin = createServiceRoleClient();
 
@@ -100,7 +102,7 @@ Now produce the lesson body in Markdown, following the required structure. Remem
   try {
     const { text } = await generateText({
       model: openaiProvider(CHAT_MODEL),
-      system: STRATEGY_PROFESSOR_TEACHING_SYSTEM,
+      system: professorTeachingSystemForLab(lab),
       prompt: userPrompt,
       temperature: 0.55,
       maxTokens: 1400,

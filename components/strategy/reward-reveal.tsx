@@ -74,10 +74,29 @@ export function RewardReveal({
 function RewardIcon({ kind }: { kind: Reward["kind"] }) {
   const cls =
     "size-10 rounded-xl flex items-center justify-center border border-gold-500/40 bg-gold-500/10 text-gold-300";
-  if (kind === "letter") return <div className={cls}><Mail className="size-5" /></div>;
-  if (kind === "template") return <div className={cls}><FileDown className="size-5" /></div>;
-  if (kind === "video") return <div className={cls}><Video className="size-5" /></div>;
-  return <div className={cls}><Quote className="size-5" /></div>;
+  if (kind === "letter")
+    return (
+      <div className={cls}>
+        <Mail className="size-5" />
+      </div>
+    );
+  if (kind === "template")
+    return (
+      <div className={cls}>
+        <FileDown className="size-5" />
+      </div>
+    );
+  if (kind === "video")
+    return (
+      <div className={cls}>
+        <Video className="size-5" />
+      </div>
+    );
+  return (
+    <div className={cls}>
+      <Quote className="size-5" />
+    </div>
+  );
 }
 
 function labelFor(kind: Reward["kind"]) {
@@ -104,8 +123,8 @@ function RewardContent({
 }) {
   const c = reward.content;
   if (reward.kind === "letter") {
-    const body = (c.body as string | undefined) ??
-      defaultLetter(displayName, moduleTitle);
+    const body =
+      (c.body as string | undefined) ?? defaultLetter(displayName, moduleTitle);
     return (
       <article className="border-l border-gold-500/30 pl-4 italic text-text-secondary leading-relaxed whitespace-pre-line">
         {body}
@@ -117,7 +136,8 @@ function RewardContent({
   }
   if (reward.kind === "quote_card") {
     const quote = (c.quote as string | undefined) ?? "Strategy is choice.";
-    const attr = (c.attribution as string | undefined) ?? "The Operator's Doctrine";
+    const attr =
+      (c.attribution as string | undefined) ?? "The Operator's Doctrine";
     return (
       <div
         className="rounded-xl p-8 text-center"
@@ -141,7 +161,7 @@ function RewardContent({
     return (
       <div>
         <p className="text-sm text-text-secondary mb-4">
-          A printable executive worksheet to apply this module's framework.
+          A printable executive worksheet to apply this module&apos;s framework.
         </p>
         {sections.length > 0 && (
           <ol className="grid sm:grid-cols-2 gap-2 list-decimal pl-5">
@@ -158,7 +178,6 @@ function RewardContent({
       </div>
     );
   }
-  // video placeholder
   return (
     <div className="rounded-xl border border-border-subtle bg-black/40 p-10 text-center text-text-muted">
       <Video className="size-7 mx-auto text-gold-300/70" />
@@ -177,5 +196,5 @@ You closed out "${moduleTitle}" — and you did it the hard way: by submitting w
 
 Most professionals will never produce a single deliverable graded by a strategist. You produced one this week. Hold that.
 
-The next module raises the stakes. Don't dilute the standard you just set.`;
+The next module raises the stakes. Don&apos;t dilute the standard you just set.`;
 }

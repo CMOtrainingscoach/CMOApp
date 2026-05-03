@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getContentLabSlugForLessonId } from "@/lib/strategy/lab-slug";
 import { getOrGenerateTheory } from "@/lib/strategy/theory";
 
 export const maxDuration = 60;
@@ -17,7 +18,8 @@ export async function POST(
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   try {
-    const result = await getOrGenerateTheory(user.id, id);
+    const lab = await getContentLabSlugForLessonId(id);
+    const result = await getOrGenerateTheory(user.id, id, lab);
     return NextResponse.json(result);
   } catch (e) {
     console.error("theory route failed", e);

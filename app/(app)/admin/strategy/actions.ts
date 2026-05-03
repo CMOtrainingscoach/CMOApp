@@ -66,6 +66,55 @@ export async function deleteModule(moduleId: string) {
   revalidatePath("/admin/strategy");
 }
 
+const moduleBookRowSchema = z.object({
+  title: z.string().min(1).max(500),
+  author: z.string().max(300).nullable().optional(),
+  url: z
+    .union([z.string(), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v == null) return null;
+      const t = String(v).trim();
+      return t === "" ? null : t;
+    }),
+  notes: z.string().max(8000).nullable().optional(),
+  xp_reward: z.number().int().min(0).max(500).default(25),
+});
+
+export async function replaceModuleBooks(
+  moduleId: string,
+  books: unknown[],
+) {
+  await requireAdmin();
+  const uuid = z.string().uuid("Invalid module ID").parse(moduleId);
+  const parsed = z
+    .array(moduleBookRowSchema)
+    .max(60)
+    .parse(Array.isArray(books) ? books : []);
+
+  const admin = createServiceRoleClient();
+
+  await admin.from("strategy_module_books").delete().eq("module_id", uuid);
+
+  if (parsed.length > 0) {
+    const rows = parsed.map((b, idx) => ({
+      module_id: uuid,
+      ord: idx,
+      title: b.title,
+      author: b.author ?? null,
+      url: b.url ?? null,
+      notes: b.notes ?? null,
+      xp_reward: b.xp_reward ?? 25,
+    }));
+    const { error } = await admin.from("strategy_module_books").insert(rows);
+    if (error) throw error;
+  }
+
+  revalidatePath("/admin/strategy");
+  revalidatePath("/strategy-lab", "layout");
+  revalidatePath("/pl-lab", "layout");
+}
+
 const lessonSchema = z.object({
   id: z.string().uuid().optional(),
   module_id: z.string().uuid(),
@@ -268,6 +317,7 @@ export async function uploadLessonHeroImage(
 
   revalidatePath("/admin/strategy");
   revalidatePath("/strategy-lab", "layout");
+  revalidatePath("/pl-lab", "layout");
 
   return { url: publicUrl };
 }
@@ -286,4 +336,5 @@ export async function clearLessonHeroImage(lessonId: string) {
 
   revalidatePath("/admin/strategy");
   revalidatePath("/strategy-lab", "layout");
+  revalidatePath("/pl-lab", "layout");
 }

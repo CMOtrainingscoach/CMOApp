@@ -135,6 +135,7 @@ export interface Database {
           score: number | null;
           feedback: Json | null;
           source: string;
+          metadata: Json | null;
           created_at: string;
           completed_at: string | null;
         };

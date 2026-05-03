@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { evaluateAnswer } from "@/lib/strategy/minigame";
+import { getContentLabSlugForQuestionId } from "@/lib/strategy/lab-slug";
 import { awardXp, XP_AMOUNTS } from "@/lib/strategy/xp";
 
 export const maxDuration = 30;
@@ -34,11 +35,13 @@ export async function POST(
     let xp_awarded = 0;
     if (result.correct) {
       xp_awarded = XP_AMOUNTS.lesson_question_correct;
+      const labSlug = await getContentLabSlugForQuestionId(body.question_id);
       await awardXp({
         userId: user.id,
         source: "lesson_question_correct",
         amount: xp_awarded,
         refId: body.question_id,
+        labSlug,
       });
     }
     return NextResponse.json({ ...result, xp_awarded });

@@ -2,10 +2,11 @@ import "server-only";
 import { z } from "zod";
 import { generateObject } from "ai";
 import { openaiProvider, CHAT_MODEL } from "@/lib/openai";
-import { STRATEGY_ASSIGNMENT_GRADER_SYSTEM } from "@/lib/prompts";
+import { assignmentGraderSystemForLab } from "@/lib/prompts";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { applySkillDeltas } from "@/lib/scorer";
-import { awardXp, XP_AMOUNTS } from "./xp";
+import { getContentLabSlugForModuleId } from "@/lib/strategy/lab-slug";
+import { awardXp, XP_AMOUNTS } from "@/lib/strategy/xp";
 import { SKILL_KEYS } from "@/types/database";
 
 const skillKeyEnum = z.enum([
@@ -80,6 +81,8 @@ export async function gradeAssignment(submissionId: string): Promise<AssignmentR
   const assignment = Array.isArray(a) ? a[0] : a;
   if (!assignment) throw new Error("assignment not found");
 
+  const assignmentLab = await getContentLabSlugForModuleId(assignment.module_id);
+
   let parsed: AssignmentReview;
   if (!process.env.OPENAI_API_KEY) {
     parsed = FALLBACK_REVIEW;
@@ -88,7 +91,7 @@ export async function gradeAssignment(submissionId: string): Promise<AssignmentR
       const { object } = await generateObject({
         model: openaiProvider(CHAT_MODEL),
         schema: ReviewSchema,
-        system: STRATEGY_ASSIGNMENT_GRADER_SYSTEM,
+        system: assignmentGraderSystemForLab(assignmentLab),
         prompt: `ASSIGNMENT
 Title: ${assignment.title}
 Prompt: ${assignment.prompt}
@@ -152,12 +155,14 @@ Grade strictly per your system rubric. Return the structured review.`,
       source: "assignment_pass",
       amount: XP_AMOUNTS.assignment_pass,
       refId: submissionId,
+      labSlug: assignmentLab,
     });
     await awardXp({
       userId,
       source: "module_complete",
       amount: XP_AMOUNTS.module_complete,
       refId: assignment.module_id,
+      labSlug: assignmentLab,
     });
 
     // Unlock all rewards on this module
