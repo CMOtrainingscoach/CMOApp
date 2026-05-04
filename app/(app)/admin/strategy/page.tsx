@@ -5,6 +5,7 @@ import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireAdmin } from "@/lib/admin";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { TrackEditorClient } from "./track-editor";
+import { TrackPublishBar } from "./track-publish-bar";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,9 @@ export default async function StrategyAdminIndex({
   ]);
 
   const selected = (tracks ?? []).find((t) => t.slug === selectedSlug) ?? null;
+
+  const labBasePath = contentLab === "pl" ? "/pl-lab" : "/strategy-lab";
+  const labShortLabel = contentLab === "pl" ? "P&L Lab" : "Strategy Lab";
 
   return (
     <>
@@ -136,7 +140,20 @@ export default async function StrategyAdminIndex({
         </Card>
 
         {selected && (
-          <TrackEditor trackId={selected.id as string} trackTitle={selected.title as string} />
+          <>
+            <TrackPublishBar
+              trackId={selected.id as string}
+              trackTitle={selected.title as string}
+              labSlug={contentLab}
+              labLabel={labShortLabel}
+              labTrackHref={`${labBasePath}/${encodeURIComponent(selected.slug as string)}`}
+              isActive={Boolean(selected.is_active)}
+            />
+            <TrackEditor
+              trackId={selected.id as string}
+              trackTitle={selected.title as string}
+            />
+          </>
         )}
       </div>
     </>

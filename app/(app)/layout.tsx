@@ -44,7 +44,7 @@ export default async function AppLayout({
         rank={levelRow?.rank ?? null}
         level={levelRow?.level ?? null}
       />
-      <main className="flex-1 min-w-0 flex flex-col">{children}</main>
+      <main className="flex-1 min-w-0 flex flex-col pt-14 lg:pt-0">{children}</main>
     </div>
   );
 }

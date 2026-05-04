@@ -66,6 +66,44 @@ export async function deleteModule(moduleId: string) {
   revalidatePath("/admin/strategy");
 }
 
+const cmsLabSlugSchema = z.enum(["strategy", "pl"]);
+
+export async function setTrackPublished(input: {
+  trackId: string;
+  labSlug: z.infer<typeof cmsLabSlugSchema>;
+  isActive: boolean;
+}) {
+  await requireAdmin();
+  const trackId = z.string().uuid("Invalid track ID").parse(input.trackId);
+  const labSlug = cmsLabSlugSchema.parse(input.labSlug);
+  const isActive = z.boolean().parse(input.isActive);
+
+  const admin = createServiceRoleClient();
+
+  const { data: row, error: fetchErr } = await admin
+    .from("strategy_tracks")
+    .select("id")
+    .eq("id", trackId)
+    .eq("lab_slug", labSlug)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+  if (!row) {
+    throw new Error("Track not found for this lab.");
+  }
+
+  const { error } = await admin
+    .from("strategy_tracks")
+    .update({ is_active: isActive })
+    .eq("id", trackId);
+
+  if (error) throw error;
+
+  revalidatePath("/admin/strategy");
+  revalidatePath("/strategy-lab", "layout");
+  revalidatePath("/pl-lab", "layout");
+}
+
 const moduleBookRowSchema = z.object({
   title: z.string().min(1).max(500),
   author: z.string().max(300).nullable().optional(),
