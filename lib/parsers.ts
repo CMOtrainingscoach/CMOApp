@@ -1,3 +1,42 @@
+import { generateText } from "ai";
+import { openaiProvider, CHAT_MODEL } from "@/lib/openai";
+
+const MAX_IMAGE_TEXT_CHARS = 14_000;
+
+async function describeImageAsText(buffer: Buffer, mime: string): Promise<string> {
+  if (!process.env.OPENAI_API_KEY) return "";
+  try {
+    const { text } = await generateText({
+      model: openaiProvider(CHAT_MODEL),
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `You are preparing text for embeddings and retrieval. Analyze this image for an executive workspace.
+
+Produce a faithful, plain-text narrative:
+- Transcribe visible text where possible (titles, bullets, captions, axes labels, KPIs).
+- Describe charts/tables/data callouts precisely; quote numbers exactly as shown.
+- If it's a photographed slide or page, approximate structure with headings implied by layout.
+- If something is unreadable or uncertain, note that explicitly rather than guessing.
+
+Avoid markdown fences. Aim for completeness but cap density; stay under roughly 4500 words total.`,
+            },
+            { type: "image", image: buffer, mimeType: mime },
+          ],
+        },
+      ],
+      temperature: 0.2,
+    });
+    return (text ?? "").trim().slice(0, MAX_IMAGE_TEXT_CHARS);
+  } catch (e) {
+    console.error("describeImageAsText failed", e);
+    return "";
+  }
+}
+
 export async function parseDocument(
   buffer: Buffer,
   mime: string,
@@ -7,6 +46,27 @@ export async function parseDocument(
   const ext = filename.toLowerCase().split(".").pop() ?? "";
 
   try {
+    if (
+      mimeLower === "image/jpeg" ||
+      mimeLower === "image/jpg" ||
+      mimeLower === "image/png" ||
+      mimeLower === "image/webp" ||
+      ext === "jpg" ||
+      ext === "jpeg" ||
+      ext === "png" ||
+      ext === "webp"
+    ) {
+      const visionMime = (() => {
+        if (mimeLower === "image/jpeg" || mimeLower === "image/jpg")
+          return "image/jpeg";
+        if (mimeLower === "image/png") return "image/png";
+        if (mimeLower === "image/webp") return "image/webp";
+        if (ext === "png") return "image/png";
+        if (ext === "webp") return "image/webp";
+        return "image/jpeg";
+      })();
+      return await describeImageAsText(buffer, visionMime);
+    }
     if (mimeLower.includes("pdf") || ext === "pdf") {
       return await parsePdf(buffer);
     }

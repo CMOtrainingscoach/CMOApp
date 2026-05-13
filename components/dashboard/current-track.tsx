@@ -11,6 +11,8 @@ export function CurrentTrack({
   percent,
   nextLessonTitle,
   nextLessonSub,
+  nextLessonHref,
+  continueLearningHref,
 }: {
   trackTitle: string;
   trackDescription: string;
@@ -19,6 +21,8 @@ export function CurrentTrack({
   percent: number;
   nextLessonTitle: string;
   nextLessonSub: string;
+  nextLessonHref: string;
+  continueLearningHref: string;
 }) {
   return (
     <Card>
@@ -74,7 +78,7 @@ export function CurrentTrack({
       </CardBody>
       <div className="flex justify-center pb-4">
         <Link
-          href="/professor"
+          href={continueLearningHref}
           className="inline-flex items-center gap-1.5 text-xs tracking-[0.16em] uppercase text-gold-300 hover:text-gold-200"
         >
           Continue Learning <ArrowRight className="size-3.5" />

@@ -1,11 +1,21 @@
 import "server-only";
 import type { ContentLabSlug, XpLabSlug } from "./lab-slug";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import {
+  loadXpLevelConfig,
+  resolveCurrentXpLevel,
+  resolveNextXpLevel,
+  xpProgressInCurrentBracket,
+  type XpLevelRow,
+} from "@/lib/xp-level-catalog";
+
+export type { XpLevelRow };
 
 export type XpSource =
   | "lesson_complete"
   | "lesson_question_correct"
   | "minigame_perfect"
+  | "practice_drill_complete"
   | "assignment_pass"
   | "module_complete"
   | "streak_week"
@@ -15,68 +25,25 @@ export const XP_AMOUNTS: Record<XpSource, number> = {
   lesson_complete: 50,
   lesson_question_correct: 5,
   minigame_perfect: 25,
+  practice_drill_complete: 5,
   assignment_pass: 300,
   module_complete: 150,
   streak_week: 100,
   reading_complete: 25,
 };
 
-export type Rank =
-  | "Initiate"
-  | "Strategist"
-  | "Operator"
-  | "Director"
-  | "Growth Architect"
-  | "CMO Candidate"
-  | "Executive Operator"
-  | "CMO Ascendant";
-
-export type RankInfo = {
-  name: Rank;
-  threshold: number;
-  next?: Rank;
-  nextThreshold?: number;
-};
-
-export const RANKS: RankInfo[] = [
-  { name: "Initiate",           threshold: 0,     next: "Strategist",         nextThreshold: 500 },
-  { name: "Strategist",         threshold: 500,   next: "Operator",           nextThreshold: 1500 },
-  { name: "Operator",           threshold: 1500,  next: "Director",           nextThreshold: 3500 },
-  { name: "Director",           threshold: 3500,  next: "Growth Architect",   nextThreshold: 6500 },
-  { name: "Growth Architect",   threshold: 6500,  next: "CMO Candidate",      nextThreshold: 10500 },
-  { name: "CMO Candidate",      threshold: 10500, next: "Executive Operator", nextThreshold: 16000 },
-  { name: "Executive Operator", threshold: 16000, next: "CMO Ascendant",      nextThreshold: 25000 },
-  { name: "CMO Ascendant",      threshold: 25000 },
-];
-
-export function rankFor(totalXp: number): RankInfo {
-  let current = RANKS[0];
-  for (const r of RANKS) {
-    if (totalXp >= r.threshold) current = r;
-    else break;
-  }
-  return current;
-}
-
-export function levelFor(totalXp: number): number {
-  return Math.max(1, Math.floor(totalXp / 100) + 1);
-}
-
-export function progressToNextRank(totalXp: number): {
-  rank: RankInfo;
-  pct: number;
-  remaining: number;
-} {
-  const rank = rankFor(totalXp);
-  if (!rank.nextThreshold) {
-    return { rank, pct: 100, remaining: 0 };
-  }
-  const span = rank.nextThreshold - rank.threshold;
-  const into = totalXp - rank.threshold;
+/** Progress computed from configurable `xp_level_config` (levels 0–100). */
+export async function xpProgressForTotalXp(totalXp: number) {
+  const rows = await loadXpLevelConfig();
+  const current = resolveCurrentXpLevel(totalXp, rows);
+  const next = resolveNextXpLevel(current, rows);
+  const { pct, remaining } = xpProgressInCurrentBracket(totalXp, current, next);
   return {
-    rank,
-    pct: Math.max(0, Math.min(100, Math.round((into / span) * 100))),
-    remaining: Math.max(0, rank.nextThreshold - totalXp),
+    pct,
+    remaining,
+    current_rank_title: current.rank_title,
+    current_level: current.level,
+    next_rank_title: next?.rank_title ?? null,
   };
 }
 
@@ -157,13 +124,16 @@ export async function bumpStreak(userId: string) {
 
 export type UserLevelSnapshot = {
   total_xp: number;
+  /** Canonical level number from DB (0–100). */
   level: number;
-  rank: Rank;
+  /** Rank label from configurable catalog (shown in UI). */
+  rank: string;
   current_streak: number;
   longest_streak: number;
   pct_to_next: number;
   remaining_to_next: number;
-  next_rank: Rank | null;
+  /** Next tier title once current bracket is cleared. */
+  next_rank: string | null;
 };
 
 export async function getOverallUserLevel(
@@ -183,23 +153,31 @@ export async function getOverallUserLevel(
       .maybeSingle(),
   ]);
   const totalXp = lvl?.total_xp ?? 0;
-  const prog = progressToNextRank(totalXp);
+  const xpProg = await xpProgressForTotalXp(totalXp);
+
+  const rows = await loadXpLevelConfig();
+  const inferred = rows.length ? resolveCurrentXpLevel(totalXp, rows) : null;
+
   return {
     total_xp: totalXp,
-    level: lvl?.level ?? levelFor(totalXp),
-    rank: (lvl?.rank as Rank) ?? "Initiate",
+    level:
+      typeof lvl?.level === "number" ? lvl.level : inferred?.level ?? 0,
+    rank:
+      typeof lvl?.rank === "string" && lvl.rank.length ?
+        lvl.rank
+      : xpProg.current_rank_title,
     current_streak: streak?.current_streak ?? 0,
     longest_streak: streak?.longest_streak ?? 0,
-    pct_to_next: prog.pct,
-    remaining_to_next: prog.remaining,
-    next_rank: (prog.rank.next as Rank) ?? null,
+    pct_to_next: xpProg.pct,
+    remaining_to_next: xpProg.remaining,
+    next_rank: xpProg.next_rank_title,
   };
 }
 
 /** @deprecated Prefer {@link getOverallUserLevel}; same behavior. */
 export const getUserLevel = getOverallUserLevel;
 
-/** Per-lab XP snapshot (strategy / pl / …). Excludes labs the user has not touched. */
+/** Per-lab XP snapshot (strategy / pl / …). */
 export async function getLabUserLevel(
   userId: string,
   labSlug: ContentLabSlug | "shared",
@@ -219,15 +197,23 @@ export async function getLabUserLevel(
       .maybeSingle(),
   ]);
   const totalXp = lvl?.total_xp ?? 0;
-  const prog = progressToNextRank(totalXp);
+  const xpProg = await xpProgressForTotalXp(totalXp);
+
+  const rows = await loadXpLevelConfig();
+  const inferred = rows.length ? resolveCurrentXpLevel(totalXp, rows) : null;
+
   return {
     total_xp: totalXp,
-    level: lvl?.level ?? levelFor(totalXp),
-    rank: (lvl?.rank as Rank) ?? "Initiate",
+    level:
+      typeof lvl?.level === "number" ? lvl.level : inferred?.level ?? 0,
+    rank:
+      typeof lvl?.rank === "string" && lvl.rank.length ?
+        lvl.rank
+      : xpProg.current_rank_title,
     current_streak: streak?.current_streak ?? 0,
     longest_streak: streak?.longest_streak ?? 0,
-    pct_to_next: prog.pct,
-    remaining_to_next: prog.remaining,
-    next_rank: (prog.rank.next as Rank) ?? null,
+    pct_to_next: xpProg.pct,
+    remaining_to_next: xpProg.remaining,
+    next_rank: xpProg.next_rank_title,
   };
 }

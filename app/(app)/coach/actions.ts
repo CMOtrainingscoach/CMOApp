@@ -119,6 +119,7 @@ async function recordReadingCompletionAndAwardXp(
 
   revalidatePath("/strategy-lab", "layout");
   revalidatePath("/pl-lab", "layout");
+  revalidatePath("/lifestyle", "layout");
 }
 
 export async function setTaskStatus(taskId: string, status: string) {

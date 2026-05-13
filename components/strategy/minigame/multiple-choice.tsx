@@ -20,11 +20,27 @@ export function MultipleChoice({
   locked,
   correctIndex,
 }: Props) {
+  const options = Array.isArray(payload?.options)
+    ? payload.options.map((o) => String(o ?? "").trim()).filter(Boolean)
+    : [];
+
+  if (options.length === 0) {
+    return (
+      <div className="space-y-5">
+        <p className="text-lg leading-relaxed text-text-primary">{prompt}</p>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm text-amber-100">
+          This question has no answer choices on file. Refresh the page — the lesson quiz will
+          rebuild automatically. If it persists, open Admin → regenerate the lesson challenge.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <p className="text-lg leading-relaxed text-text-primary">{prompt}</p>
       <div className="grid gap-3">
-        {payload.options.map((opt, i) => {
+        {options.map((opt, i) => {
           const isSelected = selected === i;
           const isCorrect = locked && correctIndex === i;
           const isWrong = locked && isSelected && correctIndex !== i;

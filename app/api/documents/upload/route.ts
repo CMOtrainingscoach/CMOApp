@@ -15,6 +15,9 @@ const ALLOWED = [
   "text/csv",
   "text/plain",
   "text/markdown",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
 ];
 
 export async function POST(req: Request) {

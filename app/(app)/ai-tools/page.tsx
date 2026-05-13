@@ -1,4 +1,3 @@
-import { Sparkles } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import { TrackComingSoon } from "@/components/shell/track-coming-soon";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +25,7 @@ export default async function AIToolsPage() {
         subtitle="AI is becoming marketing infrastructure. Learn to wield it like a CMO."
       />
       <TrackComingSoon
-        icon={Sparkles}
+        iconKey="sparkles"
         pillar="Pillar 06 / AI Marketing"
         title="AI Tools & Growth Systems"
         tagline="AI is the new operating leverage. Use it like a CMO, not a tinkerer."

@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { ShieldCheck, Sparkles, Clock, AtSign, BookOpen, ArrowRight } from "lucide-react";
+import {
+  ShieldCheck,
+  Sparkles,
+  Clock,
+  AtSign,
+  BookOpen,
+  ArrowRight,
+  TrendingUp,
+  Puzzle,
+} from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import {
   Card,
@@ -52,6 +61,26 @@ export default async function AdminPage() {
             </CardBody>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Puzzle className="size-3.5" /> Minigames
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                Upload banner images for the P&amp;L and Strategy jargon matchup practice games.
+              </p>
+              <Link
+                href="/admin/minigames"
+                className="btn-gold px-4 py-2 inline-flex items-center gap-2 text-sm"
+              >
+                Open minigame headers
+                <ArrowRight className="size-4" />
+              </Link>
+            </CardBody>
+          </Card>
+
           <AdminForm initial={cfg} />
 
           <Card>
@@ -62,15 +91,45 @@ export default async function AdminPage() {
             </CardHeader>
             <CardBody>
               <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                Author the curriculum: tracks, modules, lessons, end-of-module
-                assignments, and rewards. Regenerate AI-cached theory and
-                mini-games per lesson.
+                Author curriculum for Strategy Lab, P&amp;L, Lifestyle, and Career:
+                tracks, modules, lessons, assignments, and rewards.
+                Regenerate AI-cached theory and mini-games per lesson.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link
+                  href="/admin/strategy"
+                  className="btn-gold px-4 py-2 inline-flex items-center justify-center gap-2 text-sm"
+                >
+                  Open Strategy CMS
+                  <ArrowRight className="size-4" />
+                </Link>
+                <Link
+                  href="/admin/strategy?lab=career"
+                  className="btn-ghost px-4 py-2 inline-flex items-center justify-center gap-2 text-sm border border-border-subtle"
+                >
+                  Open Career CMS
+                  <ArrowRight className="size-4" />
+                </Link>
+              </div>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <TrendingUp className="size-3.5" /> Ascension XP ranks
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                Edit all 101 levels (Initiate → Visionary CMO): rank titles shown
+                in the app plus the total XP thresholds that advance learners.
               </p>
               <Link
-                href="/admin/strategy"
+                href="/admin/xp-levels"
                 className="btn-gold px-4 py-2 inline-flex items-center gap-2 text-sm"
               >
-                Open Strategy CMS
+                Configure XP levels
                 <ArrowRight className="size-4" />
               </Link>
             </CardBody>

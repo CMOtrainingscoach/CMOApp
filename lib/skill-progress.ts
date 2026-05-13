@@ -20,3 +20,26 @@ export function overallFromSkillRows(
   const sum = ordered.reduce((s, r) => s + r.score, 0);
   return Math.round(sum / SKILL_KEYS.length);
 }
+
+/** Map of stored scores only — no synthetic defaults (use for honest per-pillar UI). */
+export function skillScoreMapFromRows(
+  rows: { skill_key: string; score: number }[] | null | undefined,
+): Map<SkillKey, number> {
+  const m = new Map<SkillKey, number>();
+  for (const r of rows ?? []) {
+    m.set(r.skill_key as SkillKey, r.score);
+  }
+  return m;
+}
+
+/**
+ * CMO index across the eight canonical pillars.
+ * Rows missing from the DB count as 0 so partial profiles reflect gaps.
+ */
+export function overallCmoIndexFromStoredRows(
+  rows: { skill_key: string; score: number }[] | null | undefined,
+): number {
+  const map = skillScoreMapFromRows(rows);
+  const sum = SKILL_KEYS.reduce((acc, k) => acc + (map.get(k) ?? 0), 0);
+  return Math.round(sum / SKILL_KEYS.length);
+}

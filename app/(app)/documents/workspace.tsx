@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import {
@@ -13,11 +13,16 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn, formatBytes, timeAgo } from "@/lib/utils";
 import { deleteDocument } from "./actions";
+import {
+  DocumentProfessorReviewPanel,
+  type DocumentProfessorReview,
+} from "@/components/documents/document-professor-review-panel";
 
 type Doc = {
   id: string;
@@ -43,15 +48,38 @@ const STATUS_META: Record<
 };
 
 function iconFor(mime: string, ext: string) {
-  if (mime.includes("sheet") || mime.includes("excel") || ext === "xlsx" || ext === "csv")
+  if (
+    mime.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp"].includes(ext)
+  )
+    return ImageIcon;
+  if (
+    mime.includes("sheet") ||
+    mime.includes("excel") ||
+    ext === "xlsx" ||
+    ext === "csv"
+  )
     return FileSpreadsheet;
   return FileText;
 }
 
-export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
+export function DocumentsWorkspace({
+  docs,
+  reviewsByDocId,
+}: {
+  docs: Doc[];
+  reviewsByDocId: Record<string, DocumentProfessorReview[]>;
+}) {
   const router = useRouter();
   const [uploading, setUploading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selectedDoc = useMemo(
+    () =>
+      selectedId ? (docs.find((d) => d.id === selectedId) ?? null) : null,
+    [docs, selectedId],
+  );
 
   const onDrop = useCallback(
     async (files: File[]) => {
@@ -66,7 +94,9 @@ export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
             body: form,
           });
           if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
+            const err = (await res.json().catch(() => ({}))) as {
+              error?: string;
+            };
             throw new Error(err.error ?? "upload failed");
           }
         } catch (e) {
@@ -75,7 +105,6 @@ export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
       }
       setUploading(null);
       router.refresh();
-      // Poll for status updates a few times
       let attempts = 0;
       const tick = () => {
         attempts += 1;
@@ -100,6 +129,9 @@ export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
         [".pptx"],
       "text/csv": [".csv"],
       "text/plain": [".txt", ".md"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/png": [".png"],
+      "image/webp": [".webp"],
     },
   });
 
@@ -130,8 +162,9 @@ export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
                 : "Drop a document for the Professor to review"}
             </h3>
             <p className="text-sm text-text-muted mb-4 max-w-md">
-              PDF, DOCX, XLSX, PPTX, CSV, TXT • Up to 25 MB. Strategies,
-              client briefs, campaign reports, business cases.
+              PDF, DOCX, XLSX, PPTX, CSV, TXT, JPEG, PNG, WEBP slides or scans •
+              Up to 25 MB. Strategies, client briefs, campaign reports,
+              business cases.
             </p>
             <Button
               type="button"
@@ -157,99 +190,147 @@ export function DocumentsWorkspace({ docs }: { docs: Doc[] }) {
         </div>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            <FileText className="size-3.5" /> Your Documents
-          </CardTitle>
-          <span className="text-[11px] tracking-[0.16em] uppercase text-text-muted">
-            {docs.length} total
-          </span>
-        </CardHeader>
-        <CardBody className="space-y-2.5">
-          {docs.length === 0 && (
-            <div className="text-sm text-text-muted py-6 text-center">
-              No documents yet. Upload your first strategy to begin.
-            </div>
-          )}
-          {docs.map((d) => {
-            const ext = d.title.split(".").pop()?.toLowerCase() ?? "";
-            const Icon = iconFor(d.mime_type, ext);
-            const meta =
-              STATUS_META[d.status] ?? STATUS_META.uploaded;
-            const StatusIcon = meta.icon;
-            return (
-              <div
-                key={d.id}
-                className="rounded-xl border border-border-subtle bg-bg-elevated/40 p-4"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-lg bg-gold-500/8 border border-border-subtle text-gold-300 shrink-0">
-                    <Icon className="size-5" strokeWidth={1.6} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-text-primary truncate">
-                        {d.title}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-[11px] tracking-[0.16em] uppercase ${meta.color}`}
-                        >
-                          <StatusIcon
-                            className={cn(
-                              "size-3.5",
-                              d.status === "processing" && "animate-spin",
-                            )}
-                          />
-                          {meta.label}
-                        </span>
-                        <button
-                          onClick={() => {
-                            void deleteDocument(d.id).then(() =>
-                              router.refresh(),
-                            );
-                          }}
-                          className="size-7 rounded-md border border-border-hairline hover:border-danger/50 flex items-center justify-center text-text-muted hover:text-danger"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
+      <div className="flex flex-col gap-6">
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle>
+              <FileText className="size-3.5" /> Your Documents
+            </CardTitle>
+            <span className="text-[11px] tracking-[0.16em] uppercase text-text-muted">
+              {docs.length} total • click a row to open Professor review
+            </span>
+          </CardHeader>
+          <CardBody className="space-y-2.5">
+            {docs.length === 0 && (
+              <div className="text-sm text-text-muted py-6 text-center">
+                No documents yet. Upload your first strategy to begin.
+              </div>
+            )}
+            {docs.map((d) => {
+              const ext = d.title.split(".").pop()?.toLowerCase() ?? "";
+              const Icon = iconFor(d.mime_type, ext);
+              const meta = STATUS_META[d.status] ?? STATUS_META.uploaded;
+              const StatusIcon = meta.icon;
+              return (
+                <div
+                  key={d.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedId === d.id}
+                  onClick={() => setSelectedId(d.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedId(d.id);
+                    }
+                  }}
+                  className={cn(
+                    "rounded-xl border bg-bg-elevated/40 p-4 outline-none transition-colors cursor-pointer hover:border-border-gold/35 focus-visible:ring-2 focus-visible:ring-gold-400/55",
+                    selectedId === d.id
+                      ? "border-gold-400/65 ring-1 ring-gold-500/30"
+                      : "border-border-subtle",
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-lg bg-gold-500/8 border border-border-subtle text-gold-300 shrink-0">
+                      <Icon className="size-5" strokeWidth={1.6} />
                     </div>
-                    <div className="text-[11px] text-text-muted mt-0.5">
-                      {timeAgo(d.created_at)} • {formatBytes(d.size)} •{" "}
-                      {ext.toUpperCase()}
-                    </div>
-                    {d.summary && (
-                      <p className="mt-3 text-sm text-text-secondary leading-relaxed">
-                        {d.summary}
-                      </p>
-                    )}
-                    {Array.isArray(d.key_insights) && d.key_insights.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-[10px] tracking-[0.18em] uppercase text-gold-500 mb-1.5 flex items-center gap-1.5">
-                          <Sparkles className="size-3" /> Key insights
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-sm font-semibold text-text-primary truncate">
+                          {d.title}
                         </div>
-                        <ul className="space-y-1">
-                          {(d.key_insights as string[]).map((s, i) => (
-                            <li
-                              key={i}
-                              className="flex gap-2 text-sm text-text-secondary"
-                            >
-                              <span className="text-gold-400 shrink-0">›</span>
-                              <span>{s}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span
+                            className={`inline-flex items-center gap-1.5 text-[11px] tracking-[0.16em] uppercase ${meta.color}`}
+                          >
+                            <StatusIcon
+                              className={cn(
+                                "size-3.5",
+                                d.status === "processing" && "animate-spin",
+                              )}
+                            />
+                            {meta.label}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${d.title}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (selectedId === d.id) setSelectedId(null);
+                              void deleteDocument(d.id).then(() =>
+                                router.refresh(),
+                              );
+                            }}
+                            className="size-7 rounded-md border border-border-hairline hover:border-danger/50 flex items-center justify-center text-text-muted hover:text-danger"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
                       </div>
-                    )}
+                      <div className="text-[11px] text-text-muted mt-0.5">
+                        {timeAgo(d.created_at)} • {formatBytes(d.size)} •{" "}
+                        {ext.toUpperCase()}
+                      </div>
+                      {d.summary && (
+                        <p className="mt-3 text-sm text-text-secondary leading-relaxed">
+                          {d.summary}
+                        </p>
+                      )}
+                      {Array.isArray(d.key_insights) &&
+                        d.key_insights.length > 0 && (
+                          <div className="mt-3">
+                            <div className="text-[10px] tracking-[0.18em] uppercase text-gold-500 mb-1.5 flex items-center gap-1.5">
+                              <Sparkles className="size-3" /> Key insights
+                            </div>
+                            <ul className="space-y-1">
+                              {(d.key_insights as string[]).map((s, i) => (
+                                <li
+                                  key={i}
+                                  className="flex gap-2 text-sm text-text-secondary"
+                                >
+                                  <span className="text-gold-400 shrink-0">
+                                    ›
+                                  </span>
+                                  <span>{s}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </CardBody>
-      </Card>
+              );
+            })}
+          </CardBody>
+        </Card>
+
+        <div className="min-w-0">
+          {selectedDoc ? (
+            <DocumentProfessorReviewPanel
+              key={selectedDoc.id}
+              documentId={selectedDoc.id}
+              documentTitle={selectedDoc.title}
+              isReady={selectedDoc.status === "ready"}
+              reviews={reviewsByDocId[selectedDoc.id] ?? []}
+            />
+          ) : (
+            <Card className="border-border-subtle shadow-none">
+              <CardHeader>
+                <CardTitle className="text-[15px]">Professor review</CardTitle>
+              </CardHeader>
+              <CardBody>
+                <p className="text-sm text-text-muted leading-relaxed">
+                  Select a document row above, then describe the lens you want
+                  — Board, CFO, ethics, positioning, narrative, and so on.
+                  Feedback streams here and stays in your history per document.
+                </p>
+              </CardBody>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

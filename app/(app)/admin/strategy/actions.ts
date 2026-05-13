@@ -7,6 +7,13 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { clearTheoryCache } from "@/lib/strategy/theory";
 import { clearMinigame } from "@/lib/strategy/minigame";
 
+function revalidatePublishedLabLayouts() {
+  revalidatePath("/strategy-lab", "layout");
+  revalidatePath("/pl-lab", "layout");
+  revalidatePath("/lifestyle", "layout");
+  revalidatePath("/career", "layout");
+}
+
 const moduleSchema = z
   .object({
     id: z.string().uuid().optional(),
@@ -66,7 +73,122 @@ export async function deleteModule(moduleId: string) {
   revalidatePath("/admin/strategy");
 }
 
-const cmsLabSlugSchema = z.enum(["strategy", "pl"]);
+const cmsLabSlugSchema = z.enum(["strategy", "pl", "lifestyle", "career"]);
+
+const slugInputSchema = z
+  .string()
+  .min(2)
+  .max(80)
+  .regex(
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+    "URL slug: lowercase letters, numbers, hyphens only (e.g. go-to-market-101).",
+  );
+
+const createTrackSchema = z.object({
+  labSlug: cmsLabSlugSchema,
+  slug: slugInputSchema,
+  title: z.string().min(2).max(200),
+  tagline: z.string().max(400).nullable().optional(),
+  description: z.string().max(16000).nullable().optional(),
+  color: z.string().max(32).nullable().optional(),
+});
+
+export async function createStrategyTrack(
+  raw: z.input<typeof createTrackSchema>,
+): Promise<{ slug: string }> {
+  await requireAdmin();
+  const parsed = createTrackSchema.parse(raw);
+  const admin = createServiceRoleClient();
+
+  const { data: maxRows } = await admin
+    .from("strategy_tracks")
+    .select("ord")
+    .eq("lab_slug", parsed.labSlug)
+    .order("ord", { ascending: false })
+    .limit(1);
+  const top = Array.isArray(maxRows) ? maxRows[0] : null;
+  const maxOrd = typeof top?.ord === "number" ? top.ord : -1;
+
+  const nextOrd = maxOrd + 1;
+
+  const { data: inserted, error } = await admin
+    .from("strategy_tracks")
+    .insert({
+      slug: parsed.slug,
+      title: parsed.title,
+      tagline: parsed.tagline ?? null,
+      description: parsed.description ?? null,
+      color: parsed.color?.trim() || null,
+      ord: nextOrd,
+      lab_slug: parsed.labSlug,
+      total_modules: 0,
+      total_xp: 0,
+      is_active: false,
+    })
+    .select("slug")
+    .single();
+
+  if (error) {
+    throw new Error(
+      error.code === "23505"
+        ? "That URL slug is already used. Pick another slug (unique across all labs)."
+        : error.message,
+    );
+  }
+  if (!inserted?.slug) throw new Error("Track creation failed.");
+
+  revalidatePath("/admin/strategy");
+  revalidatePublishedLabLayouts();
+  return { slug: inserted.slug as string };
+}
+
+const updateTrackSchema = z.object({
+  trackId: z.string().uuid(),
+  labSlug: cmsLabSlugSchema,
+  slug: slugInputSchema,
+  title: z.string().min(2).max(200),
+  tagline: z.string().max(400).nullable().optional(),
+  description: z.string().max(16000).nullable().optional(),
+  color: z.string().max(32).nullable().optional(),
+});
+
+export async function updateStrategyTrack(raw: z.input<typeof updateTrackSchema>) {
+  await requireAdmin();
+  const parsed = updateTrackSchema.parse(raw);
+  const admin = createServiceRoleClient();
+
+  const { data: row, error: fetchErr } = await admin
+    .from("strategy_tracks")
+    .select("id")
+    .eq("id", parsed.trackId)
+    .eq("lab_slug", parsed.labSlug)
+    .maybeSingle();
+
+  if (fetchErr) throw fetchErr;
+  if (!row) throw new Error("Track not found for this lab.");
+
+  const { error } = await admin
+    .from("strategy_tracks")
+    .update({
+      slug: parsed.slug,
+      title: parsed.title,
+      tagline: parsed.tagline ?? null,
+      description: parsed.description ?? null,
+      color: parsed.color?.trim() || null,
+    })
+    .eq("id", parsed.trackId);
+
+  if (error) {
+    throw new Error(
+      error.code === "23505"
+        ? "That URL slug is already used elsewhere."
+        : error.message,
+    );
+  }
+
+  revalidatePath("/admin/strategy");
+  revalidatePublishedLabLayouts();
+}
 
 export async function setTrackPublished(input: {
   trackId: string;
@@ -100,8 +222,7 @@ export async function setTrackPublished(input: {
   if (error) throw error;
 
   revalidatePath("/admin/strategy");
-  revalidatePath("/strategy-lab", "layout");
-  revalidatePath("/pl-lab", "layout");
+  revalidatePublishedLabLayouts();
 }
 
 const moduleBookRowSchema = z.object({
@@ -149,8 +270,7 @@ export async function replaceModuleBooks(
   }
 
   revalidatePath("/admin/strategy");
-  revalidatePath("/strategy-lab", "layout");
-  revalidatePath("/pl-lab", "layout");
+  revalidatePublishedLabLayouts();
 }
 
 const lessonSchema = z.object({
@@ -354,8 +474,7 @@ export async function uploadLessonHeroImage(
     throw new Error("Could not attach image to lesson: " + updateError.message);
 
   revalidatePath("/admin/strategy");
-  revalidatePath("/strategy-lab", "layout");
-  revalidatePath("/pl-lab", "layout");
+  revalidatePublishedLabLayouts();
 
   return { url: publicUrl };
 }
@@ -373,6 +492,5 @@ export async function clearLessonHeroImage(lessonId: string) {
   if (error) throw new Error("Could not clear image: " + error.message);
 
   revalidatePath("/admin/strategy");
-  revalidatePath("/strategy-lab", "layout");
-  revalidatePath("/pl-lab", "layout");
+  revalidatePublishedLabLayouts();
 }

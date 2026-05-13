@@ -5,15 +5,15 @@ export function SkillBar({
   value,
   className,
 }: {
-  label: string;
+  label?: string;
   value: number;
   className?: string;
 }) {
   const v = Math.max(0, Math.min(100, value));
   return (
     <div className={cn("space-y-1.5", className)}>
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-text-secondary">{label}</span>
+      <div className="flex items-center justify-between text-xs gap-3">
+        {label ? <span className="text-text-secondary">{label}</span> : <span />}
         <span className="font-mono text-gold-300">{Math.round(v)}%</span>
       </div>
       <div className="skill-bar-track">

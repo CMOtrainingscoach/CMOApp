@@ -22,7 +22,11 @@ export function TrackPublishBar({
 }: {
   trackId: string;
   trackTitle: string;
-  labSlug: "strategy" | "pl";
+  labSlug:
+    | "strategy"
+    | "pl"
+    | "lifestyle"
+    | "career";
   labLabel: string;
   labTrackHref: string;
   isActive: boolean;

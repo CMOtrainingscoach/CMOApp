@@ -68,9 +68,23 @@ function keyPointsArray(raw: unknown): string[] {
   return [];
 }
 
+/** Never return fewer than 2 options — empty arrays break the challenge UI. */
+function defaultMultipleChoiceOptions(lesson: LessonRow, points: string[]): string[] {
+  const trimmed = points.map((p) => p.trim()).filter(Boolean);
+  if (trimmed.length >= 2) return trimmed.slice(0, 6);
+  const t = lesson.title?.trim() || "This lesson";
+  return [
+    `${t} — as the spine of the argument`,
+    "A tactics-only plan with no decisive bet",
+    "Copying competitors without a thesis",
+    "Optimizing vanity metrics instead of profit drivers",
+  ];
+}
+
 function fallbackMinigame(lesson: LessonRow): GeneratedQuestion[] {
   const points = keyPointsArray(lesson.key_points);
   const head = points[0] ?? lesson.title;
+  const mcOptions = defaultMultipleChoiceOptions(lesson, points);
   return [
     {
       kind: "true_false",
@@ -83,11 +97,99 @@ function fallbackMinigame(lesson: LessonRow): GeneratedQuestion[] {
     {
       kind: "multiple_choice",
       prompt: `Which is closest to the lesson's central idea?`,
-      payload: { options: points.slice(0, 4) },
+      payload: { options: mcOptions },
       correct: { index: 0 },
-      explanation: "The first key point is the spine of this lesson.",
+      explanation: "The first option anchors to the lesson thesis or key points.",
+    },
+    {
+      kind: "true_false",
+      prompt: `True or false: Mastery here requires repeating the trade-offs until they feel obvious.`,
+      payload: {},
+      correct: { value: true },
+      explanation: "Executive learning compounds through deliberate reps.",
     },
   ];
+}
+
+function parsePayload(raw: unknown): Record<string, unknown> {
+  if (raw == null) return {};
+  if (typeof raw === "string") {
+    try {
+      const v = JSON.parse(raw) as unknown;
+      return typeof v === "object" && v !== null && !Array.isArray(v)
+        ? (v as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+}
+
+function rowIsCorrupt(r: {
+  kind: string;
+  payload: unknown;
+}): boolean {
+  const kind = r.kind;
+  const p = parsePayload(r.payload);
+  if (kind === "multiple_choice") {
+    const raw = p.options ?? p.Options;
+    const opts = Array.isArray(raw)
+      ? raw.map((x) => String(x ?? "").trim()).filter(Boolean)
+      : [];
+    return opts.length < 2;
+  }
+  if (kind === "fill_step") {
+    const stepsRaw = p.steps ?? p.Steps;
+    const steps = Array.isArray(stepsRaw) ? stepsRaw : [];
+    const rawOpts = p.options ?? p.Options;
+    const opts = Array.isArray(rawOpts)
+      ? rawOpts.map((x) => String(x ?? "").trim()).filter(Boolean)
+      : [];
+    return steps.length < 2 || opts.length < 2;
+  }
+  return false;
+}
+
+/** Tighten AI/fallback output before writing to DB so we never persist empty option lists. */
+function sanitizeGeneratedQuestions(
+  questions: GeneratedQuestion[],
+  lesson: LessonRow,
+): GeneratedQuestion[] {
+  const points = keyPointsArray(lesson.key_points);
+  return questions.map((q) => {
+    if (q.kind === "multiple_choice") {
+      const opts = (q.payload as { options?: string[] }).options ?? [];
+      const cleaned = opts.map((s) => String(s).trim()).filter(Boolean);
+      if (cleaned.length >= 2) return { ...q, payload: { options: cleaned } };
+      return {
+        ...q,
+        payload: { options: defaultMultipleChoiceOptions(lesson, points) },
+        correct: { index: 0 },
+      };
+    }
+    if (q.kind === "fill_step") {
+      const fp = q.payload as {
+        steps?: { text: string; is_blank: boolean }[];
+        options?: string[];
+      };
+      const steps = Array.isArray(fp.steps) ? fp.steps : [];
+      const opts = Array.isArray(fp.options)
+        ? fp.options.map((s: string) => String(s).trim()).filter(Boolean)
+        : [];
+      if (steps.length >= 2 && opts.length >= 2) return q;
+      return {
+        kind: "multiple_choice",
+        prompt: q.prompt,
+        payload: { options: defaultMultipleChoiceOptions(lesson, points) },
+        correct: { index: 0 },
+        explanation: q.explanation,
+      };
+    }
+    return q;
+  });
 }
 
 export type MinigameResult = {
@@ -107,8 +209,10 @@ export type MinigameResult = {
 export async function getOrGenerateMinigame(
   lessonId: string,
   lab: ContentLabSlug = "strategy",
+  regenAttempt = 0,
 ): Promise<MinigameResult> {
   const admin = createServiceRoleClient();
+  const MAX_REGEN = 2;
 
   // Resolve or create the minigame row
   let { data: mg } = await admin
@@ -127,16 +231,33 @@ export async function getOrGenerateMinigame(
   }
   if (!mg) throw new Error("could not create lesson_minigames row");
 
-  // If ready, return existing questions
-  if (mg.status === "ready") {
+  // If ready, validate — corrupt/empty payloads (e.g. MC with no options) break the UI.
+  if (mg.status === "ready" && regenAttempt < MAX_REGEN) {
     const { data: rows } = await admin
       .from("lesson_questions")
       .select("id, ord, kind, prompt, payload, explanation, xp")
       .eq("lesson_id", lessonId)
       .order("ord", { ascending: true });
+
+    const list = rows ?? [];
+    const corrupt =
+      list.length === 0 ||
+      list.some((r) =>
+        rowIsCorrupt({ kind: r.kind as string, payload: r.payload }),
+      );
+
+    if (corrupt) {
+      console.warn("[minigame] corrupt or empty challenge; regenerating", {
+        lessonId,
+        regenAttempt,
+      });
+      await clearMinigame(lessonId);
+      return getOrGenerateMinigame(lessonId, lab, regenAttempt + 1);
+    }
+
     return {
       minigame_id: mg.id,
-      questions: (rows ?? []).map((r) => ({
+      questions: list.map((r) => ({
         id: r.id as string,
         ord: r.ord as number,
         kind: r.kind as GeneratedQuestion["kind"],
@@ -181,6 +302,8 @@ Generate 4 to 6 questions following the schema and your rubric.`,
       questions = fallbackMinigame(lesson);
     }
   }
+
+  questions = sanitizeGeneratedQuestions(questions, lesson);
 
   // Persist questions
   const rows = questions.map((q, i) => ({

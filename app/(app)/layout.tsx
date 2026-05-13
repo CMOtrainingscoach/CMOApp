@@ -14,18 +14,24 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: levelRow }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, avatar_url, role, weekly_streak, onboarded_at")
-      .eq("id", user.id)
-      .maybeSingle(),
-    supabase
-      .from("user_level")
-      .select("rank, level, total_xp")
-      .eq("user_id", user.id)
-      .maybeSingle(),
-  ]);
+  const [{ data: profile }, { data: levelRow }, { data: streakRow }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, avatar_url, role, onboarded_at")
+        .eq("id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("user_level")
+        .select("rank, level, total_xp")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      supabase
+        .from("streak_tracking")
+        .select("current_streak")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    ]);
 
   if (!profile?.onboarded_at) redirect("/onboarding");
 
@@ -38,7 +44,7 @@ export default async function AppLayout({
       <Sidebar
         displayName={displayName}
         avatarUrl={profile?.avatar_url}
-        weeklyStreak={profile?.weekly_streak ?? 0}
+        weeklyStreak={streakRow?.current_streak ?? 0}
         role={profile?.role ?? "CMO in the Making"}
         isAdmin={userIsAdmin}
         rank={levelRow?.rank ?? null}

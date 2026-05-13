@@ -140,3 +140,147 @@ export async function clearProfessorAvatar() {
   revalidatePath("/dashboard");
   revalidatePath("/professor");
 }
+
+const MAX_PL_JARGON_HEADER_BYTES = 4 * 1024 * 1024;
+
+export async function uploadPlJargonMatchHeader(
+  formData: FormData,
+): Promise<{ url: string }> {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  if (!(file instanceof File))
+    throw new Error("No file provided.");
+  if (file.size > MAX_PL_JARGON_HEADER_BYTES)
+    throw new Error("Image too large (max 4 MB).");
+  if (!ALLOWED_AVATAR_MIMES.has(file.type))
+    throw new Error("Unsupported image format. Use JPEG, PNG, or WebP.");
+
+  const ext =
+    file.type === "image/jpeg"
+      ? "jpg"
+      : file.type === "image/png"
+        ? "png"
+        : "webp";
+  const path = `pl-jargon/match-header_${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const admin = createServiceRoleClient();
+  const { error: uploadError } = await admin.storage
+    .from("cmo-public")
+    .upload(path, buffer, {
+      contentType: file.type,
+      cacheControl: "3600",
+      upsert: true,
+    });
+  if (uploadError)
+    throw new Error("Upload failed: " + uploadError.message);
+
+  const { data: pub } = admin.storage.from("cmo-public").getPublicUrl(path);
+  const publicUrl = pub.publicUrl;
+
+  const { error: updateError } = await admin
+    .from("app_settings")
+    .update({
+      pl_jargon_match_header_image_url: publicUrl,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", 1);
+  if (updateError)
+    throw new Error("Settings update failed: " + updateError.message);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/minigames");
+  revalidatePath("/pl-lab/jargon-match");
+
+  return { url: publicUrl };
+}
+
+export async function clearPlJargonMatchHeader() {
+  const user = await requireAdmin();
+  const admin = createServiceRoleClient();
+  await admin
+    .from("app_settings")
+    .update({
+      pl_jargon_match_header_image_url: null,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", 1);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/minigames");
+  revalidatePath("/pl-lab/jargon-match");
+}
+
+const MAX_STRATEGY_JARGON_HEADER_BYTES = 4 * 1024 * 1024;
+
+export async function uploadStrategyJargonMatchHeader(
+  formData: FormData,
+): Promise<{ url: string }> {
+  const user = await requireAdmin();
+  const file = formData.get("file");
+  if (!(file instanceof File))
+    throw new Error("No file provided.");
+  if (file.size > MAX_STRATEGY_JARGON_HEADER_BYTES)
+    throw new Error("Image too large (max 4 MB).");
+  if (!ALLOWED_AVATAR_MIMES.has(file.type))
+    throw new Error("Unsupported image format. Use JPEG, PNG, or WebP.");
+
+  const ext =
+    file.type === "image/jpeg"
+      ? "jpg"
+      : file.type === "image/png"
+        ? "png"
+        : "webp";
+  const path = `strategy-jargon/match-header_${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const admin = createServiceRoleClient();
+  const { error: uploadError } = await admin.storage
+    .from("cmo-public")
+    .upload(path, buffer, {
+      contentType: file.type,
+      cacheControl: "3600",
+      upsert: true,
+    });
+  if (uploadError)
+    throw new Error("Upload failed: " + uploadError.message);
+
+  const { data: pub } = admin.storage.from("cmo-public").getPublicUrl(path);
+  const publicUrl = pub.publicUrl;
+
+  const { error: updateError } = await admin
+    .from("app_settings")
+    .update({
+      strategy_jargon_match_header_image_url: publicUrl,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", 1);
+  if (updateError)
+    throw new Error("Settings update failed: " + updateError.message);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/minigames");
+  revalidatePath("/strategy-lab/jargon-match");
+
+  return { url: publicUrl };
+}
+
+export async function clearStrategyJargonMatchHeader() {
+  const user = await requireAdmin();
+  const admin = createServiceRoleClient();
+  await admin
+    .from("app_settings")
+    .update({
+      strategy_jargon_match_header_image_url: null,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    })
+    .eq("id", 1);
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/minigames");
+  revalidatePath("/strategy-lab/jargon-match");
+}

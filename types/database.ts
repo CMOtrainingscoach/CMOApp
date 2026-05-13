@@ -122,6 +122,58 @@ export interface Database {
         >;
         Relationships: [];
       };
+      document_professor_reviews: {
+        Row: {
+          id: string;
+          user_id: string;
+          document_id: string;
+          review_angle: string;
+          feedback: string;
+          opening_question: string | null;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["document_professor_reviews"]["Row"],
+          "id" | "created_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          opening_question?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["document_professor_reviews"]["Row"]
+        >;
+        Relationships: [];
+      };
+      career_saved_jobs: {
+        Row: {
+          id: string;
+          user_id: string;
+          listing_url: string;
+          url_key: string;
+          title: string;
+          source_domain: string | null;
+          posted_at: string | null;
+          listing_snippet: string | null;
+          resume_quote: string | null;
+          stars: number;
+          professor_feedback: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["career_saved_jobs"]["Row"],
+          "id" | "created_at" | "updated_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["career_saved_jobs"]["Row"]
+        >;
+        Relationships: [];
+      };
       tasks: {
         Row: {
           id: string;
@@ -316,6 +368,50 @@ export interface Database {
         >;
         Relationships: [];
       };
+      pl_jargon_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          terms_snapshot: Json;
+          defs_snapshot: Json;
+          correct_pairs: Json;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["pl_jargon_rounds"]["Row"],
+          "id" | "created_at"
+        > & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["pl_jargon_rounds"]["Row"]
+        >;
+        Relationships: [];
+      };
+      strategy_jargon_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          terms_snapshot: Json;
+          defs_snapshot: Json;
+          correct_pairs: Json;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["strategy_jargon_rounds"]["Row"],
+          "id" | "created_at"
+        > & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["strategy_jargon_rounds"]["Row"]
+        >;
+        Relationships: [];
+      };
       chat_messages: {
         Row: {
           id: string;
@@ -333,9 +429,33 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["chat_messages"]["Row"]>;
         Relationships: [];
       };
+      xp_level_config: {
+        Row: {
+          level: number;
+          rank_title: string;
+          min_total_xp: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["xp_level_config"]["Row"],
+          "created_at" | "updated_at"
+        > & {
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["xp_level_config"]["Row"]
+        >;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      refresh_xp_level_snapshots: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
       match_user_context: {
         Args: {
           p_user_id: string;

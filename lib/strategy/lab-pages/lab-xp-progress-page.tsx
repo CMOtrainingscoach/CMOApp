@@ -3,15 +3,18 @@ import { ArrowLeft, Award, Flame, Trophy } from "lucide-react";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { Topbar } from "@/components/shell/topbar";
 import type { LabRouteBundle } from "@/lib/strategy/lab-routes";
-import { getLabUserLevel, RANKS, XP_AMOUNTS } from "@/lib/strategy/xp";
+import { loadXpLevelConfig } from "@/lib/xp-level-catalog";
+import { getLabUserLevel, XP_AMOUNTS } from "@/lib/strategy/xp";
 
 const SOURCE_LABEL: Record<string, string> = {
   lesson_complete: "Lesson completed",
   lesson_question_correct: "Correct answer",
   minigame_perfect: "Perfect challenge run",
+  practice_drill_complete: "Practice drill completed",
   assignment_pass: "Assignment passed",
   module_complete: "Module sealed",
   streak_week: "Week-long streak",
+  reading_complete: "Reading completed",
 };
 
 export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
@@ -22,7 +25,7 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
   if (!user) return null;
   const admin = createServiceRoleClient();
 
-  const [{ data: profile }, level, { data: events }, { data: rewards }] =
+  const [{ data: profile }, level, xpLevelRows, { data: events }, { data: rewards }] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -30,6 +33,7 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
         .eq("id", user.id)
         .maybeSingle(),
       getLabUserLevel(user.id, lab.contentLabSlug),
+      loadXpLevelConfig(),
       admin
         .from("xp_log")
         .select("id, source, xp_delta, created_at")
@@ -46,6 +50,10 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
         .order("unlocked_at", { ascending: false })
         .limit(10),
     ]);
+
+  const milestones = xpLevelRows
+    .filter((r) => r.level === 0 || r.level === 100 || r.level % 10 === 0)
+    .sort((a, b) => a.level - b.level);
 
   return (
     <>
@@ -76,12 +84,12 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
           <div className="mt-8">
             <div className="relative">
               <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-border-subtle" />
-              <ol className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-                {RANKS.map((r) => {
-                  const reached = level.total_xp >= r.threshold;
-                  const isCurrent = level.rank === r.name;
+              <ol className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+                {milestones.map((r) => {
+                  const reached = level.total_xp >= r.min_total_xp;
+                  const isCurrent = level.level === r.level;
                   return (
-                    <li key={r.name} className="text-center">
+                    <li key={r.level} className="text-center">
                       <div
                         className={`mx-auto size-8 rounded-full border-2 flex items-center justify-center ${
                           isCurrent
@@ -106,10 +114,10 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
                               : "text-text-muted"
                         }`}
                       >
-                        {r.name}
+                        {r.rank_title}
                       </p>
                       <p className="text-[9px] text-text-muted mt-0.5">
-                        {r.threshold.toLocaleString()}
+                        {r.min_total_xp.toLocaleString()} XP · Lv {r.level}
                       </p>
                     </li>
                   );
@@ -122,7 +130,9 @@ export async function LabXpProgressPage({ lab }: { lab: LabRouteBundle }) {
             <div className="mt-8 max-w-md">
               <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-text-muted mb-2">
                 <span>Next rank: {level.next_rank}</span>
-                <span>{level.remaining_to_next} XP to go</span>
+                <span>
+                  {level.remaining_to_next.toLocaleString()} XP to go
+                </span>
               </div>
               <div className="skill-bar-track h-2">
                 <div

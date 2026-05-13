@@ -4,13 +4,23 @@ import Link from "next/link";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { SkillBar } from "@/components/ui/skill-bar";
-import { normalizeSkillRows, overallFromSkillRows } from "@/lib/skill-progress";
-import { STRATEGY_LAB, PL_LAB } from "@/lib/strategy/lab-routes";
+import {
+  overallCmoIndexFromStoredRows,
+  skillScoreMapFromRows,
+} from "@/lib/skill-progress";
+import {
+  STRATEGY_LAB,
+  PL_LAB,
+  LIFESTYLE_LAB,
+  CAREER_LAB,
+} from "@/lib/strategy/lab-routes";
 import {
   getLabUserLevel,
   getOverallUserLevel,
-  progressToNextRank,
 } from "@/lib/strategy/xp";
+import {
+  computeDisciplineHeatmap,
+} from "@/lib/progress/discipline-heatmap";
 import { SKILL_KEYS, SKILL_LABELS, type SkillKey } from "@/types/database";
 import { Flame, TrendingUp, Trophy, Target } from "lucide-react";
 
@@ -41,57 +51,36 @@ export default async function ProgressPage() {
   const [
     { data: profile },
     { data: skills },
-    { data: missions },
     overallXp,
     strategyXp,
     plXp,
+    lifestyleXp,
+    careerXp,
     sharedXp,
+    heatmapCells,
   ] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name, avatar_url, weekly_streak")
+      .select("display_name, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
       .from("skill_scores")
       .select("skill_key, score")
       .eq("user_id", user.id),
-    supabase
-      .from("daily_missions")
-      .select("mission_date, progress_percent")
-      .eq("user_id", user.id)
-      .order("mission_date", { ascending: false })
-      .limit(60),
     getOverallUserLevel(user.id),
     getLabUserLevel(user.id, "strategy"),
     getLabUserLevel(user.id, "pl"),
+    getLabUserLevel(user.id, "lifestyle"),
+    getLabUserLevel(user.id, "career"),
     getLabUserLevel(user.id, "shared"),
+    computeDisciplineHeatmap(supabase, user.id),
   ]);
 
-  const skillsOrdered = normalizeSkillRows(skills ?? []);
-  const skillsBy = new Map<SkillKey, number>(
-    skillsOrdered.map((s) => [s.skill_key, s.score]),
-  );
-  const overall = overallFromSkillRows(skills ?? []);
+  const skillsBy = skillScoreMapFromRows(skills ?? []);
+  const overall = overallCmoIndexFromStoredRows(skills ?? []);
 
-  // Streak heatmap data: 12 weeks
-  const days = 84;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const missionMap = new Map(
-    (missions ?? []).map((m) => [m.mission_date, m.progress_percent]),
-  );
-  const cells: { date: string; intensity: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const v = missionMap.get(ymd) ?? 0;
-    const intensity = v >= 100 ? 3 : v >= 60 ? 2 : v > 0 ? 1 : 0;
-    cells.push({ date: ymd, intensity });
-  }
-
-  const overallRankProg = progressToNextRank(overallXp.total_xp);
+  const cells = heatmapCells;
 
   return (
     <>
@@ -119,18 +108,20 @@ export default async function ProgressPage() {
                   <span className="text-gold-300 font-medium">
                     {overallXp.total_xp.toLocaleString()} XP
                   </span>
-                  {" — "}sums Strategy, P&L, future labs, and cross-lab bonuses.
+                  {" — "}
+                  rolls up Strategy, P&L, Lifestyle, Career, and shared (e.g. streak)
+                  bonuses from your live XP log.
                 </p>
                 {overallXp.next_rank && (
                   <>
                     <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-text-muted">
                       <span>To {overallXp.next_rank}</span>
-                      <span>{overallXp.remaining_to_next} XP left</span>
+                      <span>{overallXp.remaining_to_next.toLocaleString()} XP left</span>
                     </div>
                     <div className="skill-bar-track h-2">
                       <div
                         className="skill-bar-fill"
-                        style={{ width: `${overallRankProg.pct}%` }}
+                        style={{ width: `${overallXp.pct_to_next}%` }}
                       />
                     </div>
                   </>
@@ -138,7 +129,7 @@ export default async function ProgressPage() {
               </CardBody>
             </Card>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <LabXpBreakdownCard
                 title="Strategy Lab"
                 xp={strategyXp.total_xp}
@@ -153,6 +144,13 @@ export default async function ProgressPage() {
                 progressHref={`${PL_LAB.basePath}/progress`}
                 labHref={PL_LAB.basePath}
               />
+              <LabXpBreakdownCard
+                title="Lifestyle Lab"
+                xp={lifestyleXp.total_xp}
+                rank={lifestyleXp.rank}
+                progressHref={`${LIFESTYLE_LAB.basePath}/progress`}
+                labHref={LIFESTYLE_LAB.basePath}
+              />
               <div className="card-premium p-5 flex flex-col justify-between">
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.22em] text-gold-500">
@@ -165,7 +163,13 @@ export default async function ProgressPage() {
                   </p>
                 </div>
               </div>
-              <ComingSoonLabCard />
+              <LabXpBreakdownCard
+                title="Career Lab"
+                xp={careerXp.total_xp}
+                rank={careerXp.rank}
+                progressHref={`${CAREER_LAB.basePath}/progress`}
+                labHref={CAREER_LAB.basePath}
+              />
             </div>
           </div>
         </section>
@@ -197,7 +201,7 @@ export default async function ProgressPage() {
                 <Flame className="size-3.5" /> 12-Week Discipline
               </CardTitle>
               <span className="text-[11px] tracking-[0.16em] uppercase text-text-muted">
-                {profile?.weekly_streak ?? 0} day streak
+                {overallXp.current_streak} day streak
               </span>
             </CardHeader>
             <CardBody>
@@ -210,7 +214,13 @@ export default async function ProgressPage() {
                     {cells.slice(w * 7, w * 7 + 7).map((c) => (
                       <div
                         key={c.date}
-                        title={`${c.date}: ${c.intensity > 0 ? "active" : "idle"}`}
+                        title={
+                          c.xpSum > 0
+                            ? `${c.date}: ${c.xpSum.toLocaleString()} XP`
+                            : c.hadFallbackActivity
+                              ? `${c.date}: Study / coach activity (no XP logged)`
+                              : `${c.date}: rest`
+                        }
                         className="aspect-square rounded-[3px]"
                         style={{
                           backgroundColor:
@@ -246,29 +256,50 @@ export default async function ProgressPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {SKILL_KEYS.map((key) => {
-            const score = skillsBy.get(key) ?? 50;
+            const score = skillsBy.get(key);
+            const barValue = score ?? 0;
+
             return (
               <Card key={key}>
-                <CardHeader>
-                  <CardTitle>
-                    <Target className="size-3.5" /> {SKILL_LABELS[key]}
-                  </CardTitle>
-                  <span className="font-mono text-gold-300 text-sm">{score}/100</span>
+                <CardHeader className="space-y-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] uppercase tracking-[0.22em] text-gold-500">
+                        {SKILL_LABELS[key].toUpperCase()}
+                      </div>
+                      <CardTitle className="mt-2 text-lg leading-snug">
+                        <span className="inline-flex items-center gap-2">
+                          <Target className="size-3.5 shrink-0" />
+                          {SKILL_LABELS[key]}
+                        </span>
+                      </CardTitle>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-sm text-text-primary">
+                        {score !== undefined ? `${score}/100` : "—"}
+                      </div>
+                      <div className="font-mono text-xs text-gold-300 mt-0.5">
+                        {score !== undefined ? `${score}%` : ""}
+                      </div>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardBody className="space-y-3">
-                  <SkillBar label={SKILL_LABELS[key]} value={score} />
+                  <SkillBar value={barValue} />
                   <p className="text-sm text-text-muted leading-relaxed">
                     {SKILL_BLURB[key]}
                   </p>
                   <div className="text-[11px] tracking-[0.16em] uppercase text-gold-500 inline-flex items-center gap-1.5">
                     <Trophy className="size-3" />{" "}
-                    {score >= 85
-                      ? "CMO-ready"
-                      : score >= 70
-                        ? "Strong operator"
-                        : score >= 50
-                          ? "Average — push harder"
-                          : "Critical gap"}
+                    {score === undefined
+                      ? "Not assessed yet"
+                      : score >= 85
+                        ? "CMO-ready"
+                        : score >= 70
+                          ? "Strong operator"
+                          : score >= 50
+                            ? "Average — push harder"
+                            : "Critical gap"}
                   </div>
                 </CardBody>
               </Card>
@@ -316,20 +347,6 @@ function LabXpBreakdownCard({
           Lab XP log
         </Link>
       </div>
-    </div>
-  );
-}
-
-function ComingSoonLabCard() {
-  return (
-    <div className="rounded-xl border border-dashed border-border-subtle bg-white/[0.02] p-5 flex flex-col justify-center opacity-75">
-      <div className="text-[10px] uppercase tracking-[0.22em] text-text-muted">
-        Lifestyle · Career labs
-      </div>
-      <p className="mt-3 text-sm text-text-secondary leading-relaxed">
-        More labs unlock on the same XP rails. Your overall rank keeps climbing as we ship them.
-      </p>
-      <span className="badge-muted mt-4 self-start">Coming soon</span>
     </div>
   );
 }

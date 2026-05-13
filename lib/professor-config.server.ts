@@ -21,6 +21,12 @@ async function fetchConfig(useServiceRole: boolean): Promise<ProfessorConfig> {
       professor_name:
         data.professor_name ?? PROFESSOR_CONFIG_FALLBACK.professor_name,
       professor_avatar_url: data.professor_avatar_url ?? null,
+      pl_jargon_match_header_image_url:
+        (data as { pl_jargon_match_header_image_url?: string | null })
+          .pl_jargon_match_header_image_url ?? null,
+      strategy_jargon_match_header_image_url:
+        (data as { strategy_jargon_match_header_image_url?: string | null })
+          .strategy_jargon_match_header_image_url ?? null,
       professor_persona:
         data.professor_persona ?? PROFESSOR_CONFIG_FALLBACK.professor_persona,
       professor_traits:

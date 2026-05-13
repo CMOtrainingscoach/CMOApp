@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { cache } from "react";
 
@@ -52,11 +53,12 @@ export async function getCurrentUser() {
   }
 }
 
-export async function requireUser() {
+export async function requireUser(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) {
     const { redirect } = await import("next/navigation");
     redirect("/login");
+    return undefined as never;
   }
   return user;
 }

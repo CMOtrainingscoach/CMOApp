@@ -1,30 +1,56 @@
+"use client";
+
+import type { ComponentType } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import {
-  type LucideIcon,
+  type LucideProps,
   Sparkles,
+  Briefcase,
   ArrowRight,
   Hourglass,
 } from "lucide-react";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+/** Use from Server Components; icon components cannot cross the server/client boundary. */
+const TRACK_COMING_SOON_ICONS = {
+  sparkles: Sparkles,
+  briefcase: Briefcase,
+} as const;
+
+export type TrackComingSoonIconKey = keyof typeof TRACK_COMING_SOON_ICONS;
+
 export function TrackComingSoon({
-  icon: Icon,
   pillar,
   title,
   tagline,
   description,
   outcomes,
   modules,
+  feature,
+  ...iconProp
 }: {
-  icon: LucideIcon;
+  /** Prefer this when rendering from a Server Component. */
+  iconKey?: TrackComingSoonIconKey;
+  /** Only when the parent is a Client Component — do not pass from RSC. */
+  icon?: ComponentType<LucideProps>;
   pillar: string;
   title: string;
   tagline: string;
   description: string;
   outcomes: string[];
   modules: { title: string; sub: string }[];
+  /** Inserted between the main grid and the “In the meantime” CTA (e.g. Career job scan). */
+  feature?: ReactNode;
 }) {
+  const Icon =
+    "iconKey" in iconProp && iconProp.iconKey ?
+      TRACK_COMING_SOON_ICONS[iconProp.iconKey]
+    : "icon" in iconProp && iconProp.icon ?
+      iconProp.icon
+    : Sparkles;
+
   return (
     <div className="px-6 lg:px-8 pb-12 space-y-5">
       <Card className="overflow-hidden">
@@ -111,6 +137,8 @@ export function TrackComingSoon({
           </CardBody>
         </Card>
       </div>
+
+      {feature}
 
       <Card>
         <CardBody className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 py-6">

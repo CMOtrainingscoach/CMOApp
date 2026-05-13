@@ -6,8 +6,20 @@ import { requireAdmin } from "@/lib/admin";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { TrackEditorClient } from "./track-editor";
 import { TrackPublishBar } from "./track-publish-bar";
+import { TrackCreateForm } from "./track-create-form";
+import { TrackMetaEditor } from "./track-meta-editor";
+import { labContentBasePath } from "@/lib/strategy/lab-routes";
 
 export const dynamic = "force-dynamic";
+
+type CmsContentLab = "strategy" | "pl" | "lifestyle" | "career";
+
+function parseCmsLab(labRaw: string | undefined): CmsContentLab {
+  if (labRaw === "pl") return "pl";
+  if (labRaw === "lifestyle") return "lifestyle";
+  if (labRaw === "career") return "career";
+  return "strategy";
+}
 
 export default async function StrategyAdminIndex({
   searchParams,
@@ -15,8 +27,15 @@ export default async function StrategyAdminIndex({
   searchParams: Promise<{ track?: string; lab?: string }>;
 }) {
   const { track: selectedSlug, lab: labRaw } = await searchParams;
-  const contentLab = labRaw === "pl" ? ("pl" as const) : ("strategy" as const);
-  const cmsTitle = contentLab === "pl" ? "P&L Lab CMS" : "Strategy Lab CMS";
+  const contentLab = parseCmsLab(labRaw);
+  const cmsTitle =
+    contentLab === "pl"
+      ? "P&L Lab CMS"
+      : contentLab === "lifestyle"
+        ? "Lifestyle Lab CMS"
+        : contentLab === "career"
+          ? "Career Lab CMS"
+          : "Strategy Lab CMS";
 
   const adminUser = await requireAdmin();
   const supabase = await createClient();
@@ -30,15 +49,22 @@ export default async function StrategyAdminIndex({
       .maybeSingle(),
     admin
       .from("strategy_tracks")
-      .select("id, slug, title, tagline, ord, is_active")
+      .select("id, slug, title, tagline, description, color, ord, is_active")
       .eq("lab_slug", contentLab)
       .order("ord", { ascending: true }),
   ]);
 
   const selected = (tracks ?? []).find((t) => t.slug === selectedSlug) ?? null;
 
-  const labBasePath = contentLab === "pl" ? "/pl-lab" : "/strategy-lab";
-  const labShortLabel = contentLab === "pl" ? "P&L Lab" : "Strategy Lab";
+  const labBasePath = labContentBasePath(contentLab);
+  const labShortLabel =
+    contentLab === "pl"
+      ? "P&L Lab"
+      : contentLab === "lifestyle"
+        ? "Lifestyle Lab"
+        : contentLab === "career"
+          ? "Career Lab"
+          : "Strategy Lab";
 
   return (
     <>
@@ -46,7 +72,13 @@ export default async function StrategyAdminIndex({
         displayName={profile?.display_name ?? "Admin"}
         avatarUrl={profile?.avatar_url}
         subtitle={
-          contentLab === "pl" ? "P&L Lab content authoring." : "Strategy Lab content authoring."
+          contentLab === "pl"
+            ? "P&L Lab content authoring."
+            : contentLab === "lifestyle"
+              ? "Lifestyle Lab content authoring."
+              : contentLab === "career"
+                ? "Career Lab content authoring."
+                : "Strategy Lab content authoring."
         }
       />
       <div className="px-6 lg:px-8 pb-12 space-y-6">
@@ -78,6 +110,26 @@ export default async function StrategyAdminIndex({
               }`}
             >
               P&amp;L Lab
+            </Link>
+            <Link
+              href="/admin/strategy?lab=lifestyle"
+              className={`rounded-xl border px-4 py-2 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                contentLab === "lifestyle"
+                  ? "border-rose-400/45 bg-rose-500/[0.08] text-rose-100"
+                  : "border-border-subtle text-text-muted hover:border-border-gold"
+              }`}
+            >
+              Lifestyle Lab
+            </Link>
+            <Link
+              href="/admin/strategy?lab=career"
+              className={`rounded-xl border px-4 py-2 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                contentLab === "career"
+                  ? "border-sky-400/45 bg-sky-500/[0.08] text-sky-100"
+                  : "border-border-subtle text-text-muted hover:border-border-gold"
+              }`}
+            >
+              Career Lab
             </Link>
           </div>
 
@@ -136,19 +188,31 @@ export default async function StrategyAdminIndex({
                 );
               })}
             </ul>
+            <TrackCreateForm labSlug={contentLab} labLabel={labShortLabel} />
           </CardBody>
         </Card>
 
         {selected && (
           <>
-            <TrackPublishBar
-              trackId={selected.id as string}
-              trackTitle={selected.title as string}
-              labSlug={contentLab}
-              labLabel={labShortLabel}
-              labTrackHref={`${labBasePath}/${encodeURIComponent(selected.slug as string)}`}
-              isActive={Boolean(selected.is_active)}
-            />
+            <div className="space-y-3 max-w-4xl">
+              <TrackMetaEditor
+                trackId={selected.id as string}
+                labSlug={contentLab}
+                initialSlug={selected.slug as string}
+                initialTitle={selected.title as string}
+                initialTagline={(selected.tagline as string | null) ?? ""}
+                initialDescription={(selected.description as string | null) ?? ""}
+                initialColor={(selected.color as string | null) ?? ""}
+              />
+              <TrackPublishBar
+                trackId={selected.id as string}
+                trackTitle={selected.title as string}
+                labSlug={contentLab}
+                labLabel={labShortLabel}
+                labTrackHref={`${labBasePath}/${encodeURIComponent(selected.slug as string)}`}
+                isActive={Boolean(selected.is_active)}
+              />
+            </div>
             <TrackEditor
               trackId={selected.id as string}
               trackTitle={selected.title as string}

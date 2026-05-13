@@ -6,6 +6,8 @@ A premium, dark/gold AI coaching platform that operates as your private **CMO Pr
 
 Built with **Next.js 15 + TypeScript + Tailwind + Supabase (Postgres + pgvector + Storage + Auth) + OpenAI**.
 
+**Forking the framework:** after MVP you can reuse this codebase for another vertical (different school, discipline, etc.) with a fresh repo + Supabase and env-driven branding — see **`docs/template-fork.md`** and **`lib/site-config.ts`**.
+
 ---
 
 ## Modules

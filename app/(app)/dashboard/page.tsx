@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ensureTodayMission, generateProfessorBriefing } from "@/lib/coach";
+import { computeDailyMissionProgressPercent } from "@/lib/dashboard/mission-progress";
+import { loadDashboardLabTrackSnapshot } from "@/lib/dashboard/current-strategy-track";
 import { getProfessorConfig } from "@/lib/professor-config.server";
 import { Topbar } from "@/components/shell/topbar";
 import { TodaysMission } from "@/components/dashboard/todays-mission";
@@ -25,16 +27,19 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const mission = await ensureTodayMission(user.id);
+
   const [
     { data: profile },
     { data: skills },
-    { data: tracks },
-    { data: trackProgress },
     { data: tasks },
     { data: docs },
     { data: recentMemories },
-    mission,
     professorCfg,
+    labSnap,
+    missionProgressPct,
+    notifQuery,
+    { data: lessonActivity },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -46,16 +51,10 @@ export default async function DashboardPage() {
       .select("skill_key, score")
       .eq("user_id", user.id),
     supabase
-      .from("learning_tracks")
-      .select("*")
-      .order("ord", { ascending: true }),
-    supabase
-      .from("track_progress")
-      .select("track_id, percent, current_lesson_id")
-      .eq("user_id", user.id),
-    supabase
       .from("tasks")
-      .select("id, title, status, deadline, created_at")
+      .select(
+        "id, title, status, deadline, created_at, completed_at",
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
@@ -71,11 +70,32 @@ export default async function DashboardPage() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(8),
-    ensureTodayMission(user.id),
     getProfessorConfig(),
+    loadDashboardLabTrackSnapshot(user.id),
+    computeDailyMissionProgressPercent(supabase, user.id, mission),
+    supabase
+      .from("tasks")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .in("status", ["pending", "in_progress"]),
+    supabase
+      .from("lesson_progress")
+      .select(
+        `
+        lesson_id,
+        completed_at,
+        strategy_lessons ( title )
+      `,
+      )
+      .eq("user_id", user.id)
+      .eq("status", "completed")
+      .not("completed_at", "is", null)
+      .order("completed_at", { ascending: false })
+      .limit(8),
   ]);
 
-  const displayName = profile?.display_name ?? user.email?.split("@")[0] ?? "Operator";
+  const displayName =
+    profile?.display_name ?? user.email?.split("@")[0] ?? "Operator";
 
   const skillRowsNormalized = normalizeSkillRows(skills ?? []);
   const overall = overallFromSkillRows(skills ?? []);
@@ -90,37 +110,6 @@ export default async function DashboardPage() {
     recentMemories: (recentMemories ?? []).map((m) => m.content),
   });
 
-  // Current track: the one with active progress, otherwise first
-  const allTracks = tracks ?? [];
-  const trackProgressMap = new Map(
-    (trackProgress ?? []).map((t) => [t.track_id, t]),
-  );
-  const currentTrack =
-    allTracks.find((t) => trackProgressMap.has(t.id)) ?? allTracks[0];
-  const currentTrackProgress = currentTrack
-    ? trackProgressMap.get(currentTrack.id)
-    : null;
-  const trackIndex = currentTrack
-    ? allTracks.findIndex((t) => t.id === currentTrack.id) + 1
-    : 1;
-
-  // Next lesson title
-  let nextLessonTitle = "Unit Economics 101";
-  let nextLessonSub = "Understand CAC, LTV, Payback Period";
-  if (currentTrack) {
-    const { data: nextLesson } = await supabase
-      .from("lessons")
-      .select("title, body")
-      .eq("track_id", currentTrack.id)
-      .order("ord", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (nextLesson) {
-      nextLessonTitle = nextLesson.title;
-      nextLessonSub = nextLesson.body ?? nextLessonSub;
-    }
-  }
-
   // Upcoming events: tasks with deadlines
   const upcoming = (tasks ?? [])
     .filter((t) => t.deadline)
@@ -130,10 +119,40 @@ export default async function DashboardPage() {
         new Date(b.deadline as string).getTime(),
     )
     .slice(0, 3)
-    .map((t) => ({ id: t.id, title: t.title, deadline: t.deadline as string }));
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      deadline: t.deadline as string,
+    }));
 
-  // Activity feed
+  type LessonProgressRow = {
+    lesson_id: string;
+    completed_at: string;
+    strategy_lessons:
+      | { title: string | null }
+      | { title: string | null }[]
+      | null;
+  };
+
+  function embeddedLessonTitle(row: LessonProgressRow): string {
+    const s = row.strategy_lessons;
+    if (!s) return "Lesson";
+    const obj = Array.isArray(s) ? s[0] : s;
+    return obj?.title?.trim() || "Lesson";
+  }
+
+  const notifications = Math.min(99, Math.max(0, notifQuery.count ?? 0));
+
   const activity: ActivityItem[] = [
+    ...(lessonActivity ?? []).map((raw) => {
+      const lp = raw as LessonProgressRow;
+      return {
+        id: `lesson-${lp.lesson_id}`,
+        kind: "feedback" as const,
+        title: `Completed lesson: ${embeddedLessonTitle(lp)}`,
+        at: lp.completed_at,
+      };
+    }),
     ...(docs ?? []).map((d) => ({
       id: `doc-${d.id}`,
       kind: "upload" as const,
@@ -146,7 +165,7 @@ export default async function DashboardPage() {
         id: `task-${t.id}`,
         kind: "feedback" as const,
         title: `Completed task: ${t.title}`,
-        at: t.created_at,
+        at: t.completed_at ?? t.created_at,
       })),
   ]
     .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
@@ -157,7 +176,7 @@ export default async function DashboardPage() {
       <Topbar
         displayName={displayName}
         avatarUrl={profile?.avatar_url}
-        notifications={3}
+        notifications={notifications}
         subtitle="Discipline today. Freedom tomorrow. Lead like a CMO."
       />
 
@@ -169,7 +188,7 @@ export default async function DashboardPage() {
             taskItem={mission?.task_item ?? ""}
             reflectionPrompt={mission?.reflection_prompt ?? ""}
             lifestyleItem={mission?.lifestyle_item ?? ""}
-            progress={mission?.progress_percent ?? 75}
+            progress={missionProgressPct}
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -178,16 +197,15 @@ export default async function DashboardPage() {
               skills={skillRowsNormalized.slice(0, 5)}
             />
             <CurrentTrack
-              trackTitle={currentTrack?.title ?? "P&L and Business Finance"}
-              trackDescription={
-                currentTrack?.description ??
-                "Master the language of business, unit economics, and how marketing drives real profit."
-              }
-              trackIndex={trackIndex}
-              trackTotal={allTracks.length || 8}
-              percent={currentTrackProgress?.percent ?? 65}
-              nextLessonTitle={nextLessonTitle}
-              nextLessonSub={nextLessonSub}
+              trackTitle={labSnap.trackTitleDisplay}
+              trackDescription={labSnap.trackDescription}
+              trackIndex={labSnap.trackIndex}
+              trackTotal={labSnap.trackTotalInLab}
+              percent={labSnap.percent}
+              nextLessonTitle={labSnap.nextLessonTitle}
+              nextLessonSub={labSnap.nextLessonSub}
+              nextLessonHref={labSnap.nextLessonHref ?? labSnap.continueLearningHref}
+              continueLearningHref={labSnap.continueLearningHref}
             />
           </div>
 

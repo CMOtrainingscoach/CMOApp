@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
 
 import { SupabaseSessionRefresher } from "@/components/supabase/session-refresher";
+import { siteConfig } from "@/lib/site-config";
 import "./globals.css";
 
 const sans = Inter({
@@ -24,9 +25,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CMO Ascension Mode",
-  description:
-    "Your personal AI CMO professor and executive coach. Discipline today. Freedom tomorrow. Lead like a CMO.",
+  title: siteConfig.name,
+  description: siteConfig.description,
 };
 
 export default function RootLayout({

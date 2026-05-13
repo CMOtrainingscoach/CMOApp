@@ -21,7 +21,22 @@ export function FillStep({
   correctIndex,
 }: Props) {
   const steps = payload.steps ?? [];
-  const options = payload.options ?? [];
+  const options = Array.isArray(payload?.options)
+    ? payload.options.map((o) => String(o ?? "").trim()).filter(Boolean)
+    : [];
+
+  if (steps.length === 0 || options.length === 0) {
+    return (
+      <div className="space-y-5">
+        <p className="text-lg leading-relaxed text-text-primary">{prompt}</p>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm text-amber-100">
+          This drag-and-step challenge is missing options in the database. Refresh the page to
+          rebuild the quiz, or contact support if it keeps happening.
+        </div>
+      </div>
+    );
+  }
+
   const blankFilledLabel =
     selected != null ? options[selected] : null;
 

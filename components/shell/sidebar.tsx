@@ -24,6 +24,7 @@ import { Monogram } from "@/components/ui/monogram";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { initials, cn } from "@/lib/utils";
+import { siteConfig } from "@/lib/site-config";
 
 type NavItem = {
   label: string;
@@ -253,7 +254,9 @@ export function Sidebar({
             onClick={() => setMobileOpen(false)}
           >
             <Monogram size={40} />
-            <span className="truncate font-display text-lg leading-none gold-text">ME</span>
+            <span className="truncate font-display text-lg leading-none gold-text">
+              {siteConfig.mark}
+            </span>
           </Link>
           <Link
             href="/settings"
@@ -289,9 +292,11 @@ export function Sidebar({
               >
                 <Monogram size={48} />
                 <div className="pt-0.5">
-                  <div className="font-display text-xl leading-none gold-text">ME</div>
+                  <div className="font-display text-xl leading-none gold-text">
+                    {siteConfig.mark}
+                  </div>
                   <div className="mt-1 text-[9px] tracking-[0.22em] uppercase text-gold-500">
-                    CMO Ascension Mode
+                    {siteConfig.name}
                   </div>
                 </div>
               </Link>
@@ -331,9 +336,11 @@ export function Sidebar({
           <Link href="/dashboard" className="flex items-start gap-3">
             <Monogram size={56} />
             <div className="pt-1">
-              <div className="font-display text-2xl leading-none gold-text">ME</div>
+              <div className="font-display text-2xl leading-none gold-text">
+                {siteConfig.mark}
+              </div>
               <div className="mt-1.5 text-[9px] tracking-[0.22em] uppercase text-gold-500">
-                CMO Ascension Mode
+                {siteConfig.name}
               </div>
             </div>
           </Link>

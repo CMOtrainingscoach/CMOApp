@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, Lock, Sparkles, Trophy } from "lucide-react";
+import { ArrowRight, Briefcase, Lock, Puzzle, Sparkles, Trophy } from "lucide-react";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { Topbar } from "@/components/shell/topbar";
 import type { LabRouteBundle } from "@/lib/strategy/lab-routes";
 import { getLabUserLevel } from "@/lib/strategy/xp";
+import { LabStrategyHomeTabs } from "@/components/strategy/lab-strategy-home-tabs";
 
 type TrackRow = {
   id: string;
@@ -136,36 +137,125 @@ export async function LabTracksHome({ lab }: { lab: LabRouteBundle }) {
           </div>
         </section>
 
-        <section>
-          <div className="flex items-end justify-between mb-5">
-            <div>
-              <h2 className="font-display text-2xl tracking-tight gold-text">
-                {lab.homeHeadline}
-              </h2>
-              <p className="text-text-muted text-sm mt-1">{lab.homeLead}</p>
+        {lab.contentLabSlug === "career" && (
+          <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-border-gold/25">
+            <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
+              <div>
+                <span className="badge-gold inline-flex items-center gap-1">
+                  <Briefcase className="size-3" /> Opportunities
+                </span>
+                <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
+                  Resume &amp; job tools
+                </h2>
+                <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-xl">
+                  Scan roles against your CV, star what matters, and keep a tracked list — same workbench as before, now alongside your Career tracks.
+                </p>
+              </div>
+              <Link
+                href={`${lab.basePath}/opportunities`}
+                className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
+              >
+                Open opportunities <ArrowRight className="size-4" />
+              </Link>
             </div>
-          </div>
+          </section>
+        )}
 
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {(tracks ?? []).map((t) => {
-              const total = trackTotals.get(t.id as string) ?? 0;
-              const done = trackCompleted.get(t.id as string) ?? 0;
-              const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-              const active = t.is_active;
-              return (
-                <TrackCard
-                  key={t.id}
-                  basePath={lab.basePath}
-                  track={t as TrackRow}
-                  active={active}
-                  completedLessons={done}
-                  totalLessons={total}
-                  pct={pct}
-                />
-              );
-            })}
-          </div>
-        </section>
+        {lab.contentLabSlug === "pl" && (
+          <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-gold-500/20">
+            <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
+              <div>
+                <span className="badge-gold inline-flex items-center gap-1">
+                  <Puzzle className="size-3" /> Practice drill
+                </span>
+                <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
+                  P&L jargon matchup
+                </h2>
+                <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-xl">
+                  Match ten finance phrases to CFO-sharp definitions in a Duolingo-style desk.
+                  The Professor weighs in after every round so the vocabulary sticks where it belongs — the board conversation.
+                  <span className="block mt-2 text-gold-300/90">+5 P&L Lab XP each round you complete.</span>
+                </p>
+              </div>
+              <Link
+                href={`${lab.basePath}/jargon-match`}
+                className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
+              >
+                Start matchup <ArrowRight className="size-4" />
+              </Link>
+            </div>
+          </section>
+        )}
+
+        {lab.contentLabSlug === "strategy" ? (
+          <LabStrategyHomeTabs
+            tracksSection={
+              <section>
+                <div className="flex items-end justify-between mb-5">
+                  <div>
+                    <h2 className="font-display text-2xl tracking-tight gold-text">
+                      {lab.homeHeadline}
+                    </h2>
+                    <p className="text-text-muted text-sm mt-1">{lab.homeLead}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {(tracks ?? []).map((t) => {
+                    const total = trackTotals.get(t.id as string) ?? 0;
+                    const done = trackCompleted.get(t.id as string) ?? 0;
+                    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                    const active = t.is_active;
+                    return (
+                      <TrackCard
+                        key={t.id}
+                        basePath={lab.basePath}
+                        track={t as TrackRow}
+                        active={active}
+                        completedLessons={done}
+                        totalLessons={total}
+                        pct={pct}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            }
+          />
+        ) : (
+          <>
+            <section>
+              <div className="flex items-end justify-between mb-5">
+                <div>
+                  <h2 className="font-display text-2xl tracking-tight gold-text">
+                    {lab.homeHeadline}
+                  </h2>
+                  <p className="text-text-muted text-sm mt-1">{lab.homeLead}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                {(tracks ?? []).map((t) => {
+                  const total = trackTotals.get(t.id as string) ?? 0;
+                  const done = trackCompleted.get(t.id as string) ?? 0;
+                  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                  const active = t.is_active;
+                  return (
+                    <TrackCard
+                      key={t.id}
+                      basePath={lab.basePath}
+                      track={t as TrackRow}
+                      active={active}
+                      completedLessons={done}
+                      totalLessons={total}
+                      pct={pct}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </>
   );

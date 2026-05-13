@@ -3,6 +3,10 @@ import { PROFESSOR_SYSTEM } from "./prompts";
 export type ProfessorConfig = {
   professor_name: string;
   professor_avatar_url: string | null;
+  /** Banner for /pl-lab/jargon-match (optional; uploaded from Admin). */
+  pl_jargon_match_header_image_url: string | null;
+  /** Banner for /strategy-lab/jargon-match (optional; uploaded from Admin). */
+  strategy_jargon_match_header_image_url: string | null;
   professor_persona: string;
   professor_traits: string[];
   professor_response_length: string;
@@ -16,6 +20,8 @@ export type ProfessorConfig = {
 export const PROFESSOR_CONFIG_FALLBACK: ProfessorConfig = {
   professor_name: "AI CMO Professor",
   professor_avatar_url: null,
+  pl_jargon_match_header_image_url: null,
+  strategy_jargon_match_header_image_url: null,
   professor_persona:
     "A senior partner at a top consulting firm coaching her best protégé.",
   professor_traits: ["direct", "strategic", "challenging", "premium"],

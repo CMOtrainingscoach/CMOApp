@@ -4,6 +4,7 @@ import { openaiProvider, CHAT_MODEL } from "./openai";
 import { COACH_SYSTEM, PROFESSOR_BRIEFING_SYSTEM } from "./prompts";
 import { getProfessorConfig } from "./professor-config.server";
 import { todayIso } from "./utils";
+import { loadDashboardLabTrackSnapshot } from "@/lib/dashboard/current-strategy-track";
 import { createClient } from "./supabase/server";
 import type { SkillKey } from "@/types/database";
 
@@ -80,7 +81,7 @@ export async function ensureTodayMission(userId: string) {
     .maybeSingle();
   if (existing) return existing;
 
-  const [{ data: profile }, { data: skills }, { data: refls }, { data: docs }, { data: trackProg }] =
+  const [{ data: profile }, { data: skills }, { data: refls }, { data: docs }, labSnap] =
     await Promise.all([
       supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
       supabase
@@ -101,22 +102,14 @@ export async function ensureTodayMission(userId: string) {
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(3),
-      supabase
-        .from("track_progress")
-        .select("track_id, learning_tracks(title)")
-        .eq("user_id", userId)
-        .order("started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+      loadDashboardLabTrackSnapshot(userId),
     ]);
 
   const mission = await generateDailyMission({
     displayName: profile?.display_name ?? "Operator",
     weakestSkills: (skills as { skill_key: SkillKey; score: number }[]) ?? [],
     recentReflections: (refls ?? []).map((r) => r.response),
-    currentTrackTitle:
-      (trackProg as { learning_tracks: { title: string } | null } | null)
-        ?.learning_tracks?.title ?? null,
+    currentTrackTitle: labSnap.trackTitle,
     recentDocsTitles: (docs ?? []).map((d) => d.title),
   });
 
