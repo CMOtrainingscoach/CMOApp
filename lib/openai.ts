@@ -1,24 +1,38 @@
 import OpenAI from "openai";
 import { createOpenAI } from "@ai-sdk/openai";
 
+/** Non-empty, trimmed server-side key only (never use on the client). */
+export function getOpenAiApiKey(): string | undefined {
+  const raw = process.env.OPENAI_API_KEY;
+  if (raw == null) return undefined;
+  const t = String(raw).trim();
+  return t.length > 0 ? t : undefined;
+}
+
+export function isOpenAiConfigured(): boolean {
+  return getOpenAiApiKey() !== undefined;
+}
+
 let _openaiClient: OpenAI | null = null;
+let _clientKeyFingerprint = "";
 
 export function getOpenAIClient(): OpenAI {
-  if (!_openaiClient) {
-    _openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY ?? "missing-key",
-    });
+  const key = getOpenAiApiKey() ?? "missing-key";
+  if (!_openaiClient || _clientKeyFingerprint !== key) {
+    _openaiClient = new OpenAI({ apiKey: key });
+    _clientKeyFingerprint = key;
   }
   return _openaiClient;
 }
 
 let _openaiProvider: ReturnType<typeof createOpenAI> | null = null;
+let _providerKeyFingerprint = "";
 
 export function getOpenAIProvider() {
-  if (!_openaiProvider) {
-    _openaiProvider = createOpenAI({
-      apiKey: process.env.OPENAI_API_KEY ?? "missing-key",
-    });
+  const key = getOpenAiApiKey() ?? "missing-key";
+  if (!_openaiProvider || _providerKeyFingerprint !== key) {
+    _openaiProvider = createOpenAI({ apiKey: key });
+    _providerKeyFingerprint = key;
   }
   return _openaiProvider;
 }

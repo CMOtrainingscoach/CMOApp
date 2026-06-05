@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -11,6 +11,8 @@ type Props = {
   moduleId: string;
   /** Base path without trailing slash, e.g. `/strategy-lab` or `/pl-lab` */
   labBasePath?: string;
+  /** Pre-filled when revising after a revision verdict */
+  initialContent?: string;
 };
 
 export function AssignmentForm({
@@ -18,9 +20,14 @@ export function AssignmentForm({
   trackSlug,
   moduleId,
   labBasePath = "/strategy-lab",
+  initialContent = "",
 }: Props) {
   const router = useRouter();
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(initialContent);
+
+  useEffect(() => {
+    setContent(initialContent);
+  }, [assignmentId, initialContent]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 

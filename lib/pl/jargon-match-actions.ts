@@ -8,15 +8,23 @@ import {
   JARGON_ROUND_SIZE,
 } from "@/lib/pl/jargon-match-bank";
 
-export type JargonSurfaceCell = { id: string; label: string };
+/** Left column may include an optional headshot URL (e.g. Lifestyle scene matchup). */
+export type JargonSurfaceCell = {
+  id: string;
+  label: string;
+  imageUrl?: string | null;
+};
 
-export type StartPlJargonRoundResult =
+/** Shared success/error shape for all jargon-style matchup rounds. */
+export type JargonMatchRoundStartResult =
   | {
       roundId: string;
       terms: JargonSurfaceCell[];
       defs: JargonSurfaceCell[];
     }
   | { error: string };
+
+export type StartPlJargonRoundResult = JargonMatchRoundStartResult;
 
 export type JargonMiss = {
   term: string;

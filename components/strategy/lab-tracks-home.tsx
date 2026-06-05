@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, Briefcase, Lock, Puzzle, Sparkles, Trophy } from "lucide-react";
+import { ArrowRight, Brain, Briefcase, Lock, Sparkles, Trophy } from "lucide-react";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { Topbar } from "@/components/shell/topbar";
 import type { LabRouteBundle } from "@/lib/strategy/lab-routes";
 import { getLabUserLevel } from "@/lib/strategy/xp";
 import { LabStrategyHomeTabs } from "@/components/strategy/lab-strategy-home-tabs";
+import { LabPlHomeTabs } from "@/components/strategy/lab-pl-home-tabs";
+import { LabLifestyleHomeTabs } from "@/components/strategy/lab-lifestyle-home-tabs";
 
 type TrackRow = {
   id: string;
@@ -45,6 +47,19 @@ export async function LabTracksHome({ lab }: { lab: LabRouteBundle }) {
         .select("lesson_id, status")
         .eq("user_id", user.id),
     ]);
+
+  let identityResumeId: string | null = null;
+  if (lab.contentLabSlug === "career") {
+    const { data: ex } = await supabase
+      .from("executive_identity_sessions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "in_progress")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    identityResumeId = ex?.id ?? null;
+  }
 
   const completedLessonIds = new Set(
     (lessonProgressRows.data ?? [])
@@ -138,57 +153,148 @@ export async function LabTracksHome({ lab }: { lab: LabRouteBundle }) {
         </section>
 
         {lab.contentLabSlug === "career" && (
-          <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-border-gold/25">
-            <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
-              <div>
-                <span className="badge-gold inline-flex items-center gap-1">
-                  <Briefcase className="size-3" /> Opportunities
-                </span>
-                <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
-                  Resume &amp; job tools
-                </h2>
+          <>
+            <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-border-gold/25">
+              <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
+                <div>
+                  <span className="badge-gold inline-flex items-center gap-1">
+                    <Brain className="size-3" /> Executive Identity
+                  </span>
+                  <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
+                    Executive Identity Assessment
+                  </h2>
                 <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-xl">
-                  Scan roles against your CV, star what matters, and keep a tracked list — same workbench as before, now alongside your Career tracks.
+                  Conversation-first deep dive — career arc, ambitions, ideals, hobbies, sharp
+                  elbows, plus how sharp you truly are across marketing storytelling and creator
+                  channels (social, podcasting, publishing). Ends in a dossier plus Brainmap of
+                  your identity graph — designed to launch credible personal-brand motion.
                 </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:items-end shrink-0">
+                  {identityResumeId && (
+                    <Link
+                      href={`${lab.basePath}/identity-assessment/session/${identityResumeId}`}
+                      className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap w-full sm:w-auto"
+                    >
+                      Continue session <ArrowRight className="size-4" />
+                    </Link>
+                  )}
+                  <Link
+                    href={`${lab.basePath}/identity-assessment`}
+                    className={
+                      identityResumeId
+                        ? "btn-ghost px-5 py-3 inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap border border-border rounded-lg w-full sm:w-auto"
+                        : "btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
+                    }
+                  >
+                    {identityResumeId ? (
+                      <>New assessment</>
+                    ) : (
+                      <>
+                        Start assessment <ArrowRight className="size-4" />
+                      </>
+                    )}
+                  </Link>
+                </div>
               </div>
-              <Link
-                href={`${lab.basePath}/opportunities`}
-                className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
-              >
-                Open opportunities <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          </section>
-        )}
+            </section>
 
-        {lab.contentLabSlug === "pl" && (
-          <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-gold-500/20">
-            <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
-              <div>
-                <span className="badge-gold inline-flex items-center gap-1">
-                  <Puzzle className="size-3" /> Practice drill
-                </span>
-                <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
-                  P&L jargon matchup
-                </h2>
-                <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-xl">
-                  Match ten finance phrases to CFO-sharp definitions in a Duolingo-style desk.
-                  The Professor weighs in after every round so the vocabulary sticks where it belongs — the board conversation.
-                  <span className="block mt-2 text-gold-300/90">+5 P&L Lab XP each round you complete.</span>
-                </p>
+            <section className="card-premium relative overflow-hidden p-8 sm:p-10 border-border-gold/25">
+              <div className="grid gap-8 sm:grid-cols-[minmax(0,1fr)_auto] items-center">
+                <div>
+                  <span className="badge-gold inline-flex items-center gap-1">
+                    <Briefcase className="size-3" /> Opportunities
+                  </span>
+                  <h2 className="mt-3 font-display text-2xl tracking-tight gold-text">
+                    Resume &amp; job tools
+                  </h2>
+                  <p className="mt-3 text-sm text-text-secondary leading-relaxed max-w-xl">
+                    Scan roles against your CV, star what matters, and keep a tracked list — same workbench as before, now alongside your Career tracks.
+                  </p>
+                </div>
+                <Link
+                  href={`${lab.basePath}/opportunities`}
+                  className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
+                >
+                  Open opportunities <ArrowRight className="size-4" />
+                </Link>
               </div>
-              <Link
-                href={`${lab.basePath}/jargon-match`}
-                className="btn-gold px-5 py-3 inline-flex items-center justify-center gap-2 text-sm shrink-0 whitespace-nowrap"
-              >
-                Start matchup <ArrowRight className="size-4" />
-              </Link>
-            </div>
-          </section>
+            </section>
+          </>
         )}
 
         {lab.contentLabSlug === "strategy" ? (
           <LabStrategyHomeTabs
+            tracksSection={
+              <section>
+                <div className="flex items-end justify-between mb-5">
+                  <div>
+                    <h2 className="font-display text-2xl tracking-tight gold-text">
+                      {lab.homeHeadline}
+                    </h2>
+                    <p className="text-text-muted text-sm mt-1">{lab.homeLead}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {(tracks ?? []).map((t) => {
+                    const total = trackTotals.get(t.id as string) ?? 0;
+                    const done = trackCompleted.get(t.id as string) ?? 0;
+                    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                    const active = t.is_active;
+                    return (
+                      <TrackCard
+                        key={t.id}
+                        basePath={lab.basePath}
+                        track={t as TrackRow}
+                        active={active}
+                        completedLessons={done}
+                        totalLessons={total}
+                        pct={pct}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            }
+          />
+        ) : lab.contentLabSlug === "pl" ? (
+          <LabPlHomeTabs
+            tracksSection={
+              <section>
+                <div className="flex items-end justify-between mb-5">
+                  <div>
+                    <h2 className="font-display text-2xl tracking-tight gold-text">
+                      {lab.homeHeadline}
+                    </h2>
+                    <p className="text-text-muted text-sm mt-1">{lab.homeLead}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                  {(tracks ?? []).map((t) => {
+                    const total = trackTotals.get(t.id as string) ?? 0;
+                    const done = trackCompleted.get(t.id as string) ?? 0;
+                    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                    const active = t.is_active;
+                    return (
+                      <TrackCard
+                        key={t.id}
+                        basePath={lab.basePath}
+                        track={t as TrackRow}
+                        active={active}
+                        completedLessons={done}
+                        totalLessons={total}
+                        pct={pct}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            }
+          />
+        ) : lab.contentLabSlug === "lifestyle" ? (
+          <LabLifestyleHomeTabs
             tracksSection={
               <section>
                 <div className="flex items-end justify-between mb-5">

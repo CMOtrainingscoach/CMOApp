@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { Suspense } from "react";
 import { Topbar } from "@/components/shell/topbar";
 import Link from "next/link";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { ProgressRing } from "@/components/ui/progress-ring";
 import { SkillBar } from "@/components/ui/skill-bar";
+import { ProgressShell } from "@/components/progress/progress-shell";
 import {
   overallCmoIndexFromStoredRows,
   skillScoreMapFromRows,
@@ -23,6 +25,20 @@ import {
 } from "@/lib/progress/discipline-heatmap";
 import { SKILL_KEYS, SKILL_LABELS, type SkillKey } from "@/types/database";
 import { Flame, TrendingUp, Trophy, Target } from "lucide-react";
+import type { Json } from "@/types/database";
+import {
+  parseAnswersFromDb,
+  parseConversationFromDb,
+  safeParseBrainmap,
+} from "@/lib/career/identity-assessment/session-map";
+import {
+  buildProfessorTopicMetaMap,
+  buildUniversalMindmapBundle,
+  type ProfessorMindmapClusterRow,
+  type ProfessorMindmapTopicRow,
+} from "@/lib/progress/build-universal-mindmap-bundle";
+import { loadCmoLifeRoadmapForUser } from "@/lib/progress/load-cmo-life-roadmap";
+import { CmoLifeRoadmap } from "@/components/progress/cmo-life-roadmap";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +74,10 @@ export default async function ProgressPage() {
     careerXp,
     sharedXp,
     heatmapCells,
+    { data: eiRow },
+    { data: topicRows },
+    { data: clusterRows },
+    cmoLifeSteps,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -75,6 +95,26 @@ export default async function ProgressPage() {
     getLabUserLevel(user.id, "career"),
     getLabUserLevel(user.id, "shared"),
     computeDisciplineHeatmap(supabase, user.id),
+    supabase
+      .from("executive_identity_sessions")
+      .select("conversation, answers, brainmap")
+      .eq("user_id", user.id)
+      .eq("status", "completed")
+      .not("brainmap", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("professor_mindmap_topics")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("professor_mindmap_clusters")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("updated_at", { ascending: false }),
+    loadCmoLifeRoadmapForUser(supabase, user.id),
   ]);
 
   const skillsBy = skillScoreMapFromRows(skills ?? []);
@@ -82,15 +122,27 @@ export default async function ProgressPage() {
 
   const cells = heatmapCells;
 
-  return (
+  const topics = (topicRows ?? []) as ProfessorMindmapTopicRow[];
+  const clusters = (clusterRows ?? []) as ProfessorMindmapClusterRow[];
+  const identityBrainmap = safeParseBrainmap(
+    (eiRow?.brainmap as Json) ?? null,
+  );
+  const mindmapBundle = buildUniversalMindmapBundle(
+    identityBrainmap,
+    topics,
+    clusters,
+  );
+  const professorTopicMeta = buildProfessorTopicMetaMap(topics, clusters);
+  const identityDrawer = eiRow
+    ? {
+        conversation: parseConversationFromDb(eiRow.conversation),
+        answers: parseAnswersFromDb(eiRow.answers),
+      }
+    : null;
+
+  const mastery = (
     <>
-      <Topbar
-        displayName={profile?.display_name ?? "Operator"}
-        avatarUrl={profile?.avatar_url}
-        subtitle="Track development across the eight pillars of CMO mastery."
-      />
-      <div className="px-6 lg:px-8 pb-12 space-y-5">
-        <section className="space-y-3">
+      <section className="space-y-3">
           <h2 className="font-display text-xl tracking-tight gold-text inline-flex items-center gap-2">
             <Trophy className="size-4 text-gold-400" /> Ascension XP · all labs
           </h2>
@@ -306,7 +358,39 @@ export default async function ProgressPage() {
             );
           })}
         </div>
-      </div>
+    </>
+  );
+
+  return (
+    <>
+      <Topbar
+        displayName={profile?.display_name ?? "Operator"}
+        avatarUrl={profile?.avatar_url}
+        subtitle="Track development across the eight pillars of CMO mastery."
+      />
+      <Suspense
+        fallback={
+          <div className="px-6 lg:px-8 pb-12 text-sm text-text-muted">
+            Loading…
+          </div>
+        }
+      >
+        <ProgressShell
+          mastery={mastery}
+          mindmapBundle={mindmapBundle}
+          identityDrawer={identityDrawer}
+          professorTopicMeta={professorTopicMeta}
+          professorMindmapClusters={clusters}
+          professorMindmapTopics={topics}
+          cmoLife={
+            <CmoLifeRoadmap
+              steps={cmoLifeSteps}
+              avatarUrl={profile?.avatar_url ?? null}
+              displayName={profile?.display_name ?? null}
+            />
+          }
+        />
+      </Suspense>
     </>
   );
 }

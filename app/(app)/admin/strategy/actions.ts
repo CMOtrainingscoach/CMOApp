@@ -23,6 +23,7 @@ const moduleSchema = z
     summary: z.string().max(2000).nullable().optional(),
     description: z.string().max(100_000).nullable().optional(),
     xp_reward: z.number().int().min(0).max(2000).default(150),
+    assignment_required: z.boolean().default(true),
   })
   .superRefine((data, ctx) => {
     if (!data.id && !data.track_id) {
@@ -47,6 +48,7 @@ export async function upsertModule(input: z.input<typeof moduleSchema>) {
         summary: parsed.summary ?? null,
         description: parsed.description ?? null,
         xp_reward: parsed.xp_reward,
+        assignment_required: parsed.assignment_required,
       })
       .eq("id", parsed.id);
   } else {
@@ -61,9 +63,11 @@ export async function upsertModule(input: z.input<typeof moduleSchema>) {
       summary: parsed.summary ?? null,
       description: parsed.description ?? null,
       xp_reward: parsed.xp_reward,
+      assignment_required: parsed.assignment_required,
     });
   }
   revalidatePath("/admin/strategy");
+  revalidatePublishedLabLayouts();
 }
 
 export async function deleteModule(moduleId: string) {
@@ -329,15 +333,21 @@ export async function regenerateLessonCaches(lessonId: string) {
   revalidatePath("/admin/strategy");
 }
 
-const assignmentSchema = z.object({
-  id: z.string().uuid().optional(),
-  module_id: z.string().uuid(),
-  title: z.string().min(2).max(200),
-  prompt: z.string().min(10).max(100_000),
-  rubric: z.record(z.string(), z.string().max(8000)),
-  success_criteria: z.array(z.string().min(2).max(2000)).max(30),
-  max_score: z.number().int().min(10).max(1000).default(100),
-});
+const assignmentSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    module_id: z.string().uuid(),
+    title: z.string().min(2).max(200),
+    prompt: z.string().min(10).max(100_000),
+    rubric: z.record(z.string(), z.string().max(8000)),
+    success_criteria: z.array(z.string().min(2).max(2000)).max(30),
+    max_score: z.number().int().min(10).max(1000).default(100),
+    passing_score: z.number().int().min(1).max(1000).default(80),
+  })
+  .refine((d) => d.passing_score <= d.max_score, {
+    message: "Passing score cannot exceed max score",
+    path: ["passing_score"],
+  });
 
 export async function upsertAssignment(
   input: z.input<typeof assignmentSchema>,
@@ -354,6 +364,7 @@ export async function upsertAssignment(
         rubric: parsed.rubric,
         success_criteria: parsed.success_criteria,
         max_score: parsed.max_score,
+        passing_score: parsed.passing_score,
       })
       .eq("id", parsed.id);
   } else {
@@ -364,6 +375,7 @@ export async function upsertAssignment(
       rubric: parsed.rubric,
       success_criteria: parsed.success_criteria,
       max_score: parsed.max_score,
+      passing_score: parsed.passing_score,
     });
   }
   revalidatePath("/admin/strategy");
@@ -373,7 +385,7 @@ const rewardSchema = z.object({
   id: z.string().uuid().optional(),
   module_id: z.string().uuid(),
   ord: z.number().int().min(0).max(20).default(0),
-  kind: z.enum(["letter", "template", "video", "quote_card"]),
+  kind: z.enum(["letter", "template", "video", "quote_card", "image"]),
   title: z.string().min(2).max(200),
   description: z.string().max(16_000).nullable().optional(),
   content: z.record(z.string(), z.unknown()),
@@ -412,6 +424,158 @@ export async function deleteReward(rewardId: string) {
   const admin = createServiceRoleClient();
   await admin.from("module_rewards").delete().eq("id", rewardId);
   revalidatePath("/admin/strategy");
+}
+
+const MAX_REWARD_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_REWARD_IMAGE_MIMES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+/** Upload poster/image for kind=image rewards; merges `image_url` into existing content JSON. */
+export async function uploadModuleRewardImage(
+  formData: FormData,
+): Promise<{ url: string }> {
+  await requireAdmin();
+  const rewardId = formData.get("reward_id");
+  const file = formData.get("file");
+  if (
+    typeof rewardId !== "string" ||
+    !z.string().uuid().safeParse(rewardId).success
+  ) {
+    throw new Error("Invalid reward id.");
+  }
+  if (!(file instanceof File)) throw new Error("No file provided.");
+  if (file.size > MAX_REWARD_IMAGE_BYTES)
+    throw new Error("Image too large (max 5 MB).");
+  if (!ALLOWED_REWARD_IMAGE_MIMES.has(file.type))
+    throw new Error("Unsupported format. Use JPEG, PNG, or WebP.");
+
+  const admin = createServiceRoleClient();
+  const { data: rw, error: fetchErr } = await admin
+    .from("module_rewards")
+    .select("id, kind, content")
+    .eq("id", rewardId)
+    .maybeSingle();
+  if (fetchErr || !rw) throw new Error("Reward not found.");
+  if ((rw.kind as string) !== "image")
+    throw new Error("Only image rewards accept uploads.");
+
+  const ext =
+    file.type === "image/jpeg"
+      ? "jpg"
+      : file.type === "image/png"
+        ? "png"
+        : "webp";
+  const path = `strategy-rewards/${rewardId}/image_${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await admin.storage
+    .from("cmo-public")
+    .upload(path, buffer, {
+      contentType: file.type,
+      cacheControl: "3600",
+      upsert: true,
+    });
+  if (uploadError) throw new Error("Upload failed: " + uploadError.message);
+
+  const { data: pub } = admin.storage.from("cmo-public").getPublicUrl(path);
+  const publicUrl = pub.publicUrl;
+
+  const prev =
+    rw.content && typeof rw.content === "object" && !Array.isArray(rw.content)
+      ? (rw.content as Record<string, unknown>)
+      : {};
+  const nextContent = { ...prev, image_url: publicUrl };
+
+  const { error: updateError } = await admin
+    .from("module_rewards")
+    .update({ content: nextContent })
+    .eq("id", rewardId);
+  if (updateError)
+    throw new Error("Could not attach image: " + updateError.message);
+
+  revalidatePath("/admin/strategy");
+  revalidatePublishedLabLayouts();
+
+  return { url: publicUrl };
+}
+
+const MAX_REWARD_VIDEO_BYTES = 80 * 1024 * 1024;
+const ALLOWED_REWARD_VIDEO_MIMES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+]);
+
+/** Upload MP4/WebM/MOV for kind=video rewards; merges `video_url` into existing content JSON. */
+export async function uploadModuleRewardVideo(
+  formData: FormData,
+): Promise<{ url: string }> {
+  await requireAdmin();
+  const rewardId = formData.get("reward_id");
+  const file = formData.get("file");
+  if (
+    typeof rewardId !== "string" ||
+    !z.string().uuid().safeParse(rewardId).success
+  ) {
+    throw new Error("Invalid reward id.");
+  }
+  if (!(file instanceof File)) throw new Error("No file provided.");
+  if (file.size > MAX_REWARD_VIDEO_BYTES)
+    throw new Error("Video too large (max 80 MB).");
+  if (!ALLOWED_REWARD_VIDEO_MIMES.has(file.type))
+    throw new Error("Unsupported format. Use MP4, WebM, or MOV.");
+
+  const admin = createServiceRoleClient();
+  const { data: rw, error: fetchErr } = await admin
+    .from("module_rewards")
+    .select("id, kind, content")
+    .eq("id", rewardId)
+    .maybeSingle();
+  if (fetchErr || !rw) throw new Error("Reward not found.");
+  if ((rw.kind as string) !== "video")
+    throw new Error("Only video rewards accept video uploads.");
+
+  const ext =
+    file.type === "video/quicktime"
+      ? "mov"
+      : file.type === "video/webm"
+        ? "webm"
+        : "mp4";
+  const path = `strategy-rewards/${rewardId}/video_${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await admin.storage
+    .from("cmo-public")
+    .upload(path, buffer, {
+      contentType: file.type,
+      cacheControl: "86400",
+      upsert: true,
+    });
+  if (uploadError) throw new Error("Upload failed: " + uploadError.message);
+
+  const { data: pub } = admin.storage.from("cmo-public").getPublicUrl(path);
+  const publicUrl = pub.publicUrl;
+
+  const prev =
+    rw.content && typeof rw.content === "object" && !Array.isArray(rw.content)
+      ? (rw.content as Record<string, unknown>)
+      : {};
+  const nextContent = { ...prev, video_url: publicUrl };
+
+  const { error: updateError } = await admin
+    .from("module_rewards")
+    .update({ content: nextContent })
+    .eq("id", rewardId);
+  if (updateError)
+    throw new Error("Could not attach video: " + updateError.message);
+
+  revalidatePath("/admin/strategy");
+  revalidatePublishedLabLayouts();
+
+  return { url: publicUrl };
 }
 
 // =====================================================================

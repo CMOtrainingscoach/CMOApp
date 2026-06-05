@@ -234,7 +234,7 @@ async function TrackEditor({
   const admin = createServiceRoleClient();
   const { data: modules } = await admin
     .from("strategy_modules")
-    .select("id, ord, title, summary, description, xp_reward")
+    .select("id, ord, title, summary, description, xp_reward, assignment_required")
     .eq("track_id", trackId)
     .order("ord", { ascending: true });
 
@@ -251,7 +251,9 @@ async function TrackEditor({
             .order("ord", { ascending: true }),
           admin
             .from("module_assignments")
-            .select("id, module_id, title, prompt, rubric, success_criteria, max_score")
+            .select(
+              "id, module_id, title, prompt, rubric, success_criteria, max_score, passing_score",
+            )
             .in("module_id", moduleIds),
           admin
             .from("module_rewards")
@@ -324,6 +326,8 @@ async function TrackEditor({
         summary: (m.summary as string | null) ?? "",
         description: (m.description as string | null) ?? "",
         xp_reward: m.xp_reward as number,
+        assignment_required:
+          (m as { assignment_required?: boolean }).assignment_required !== false,
       }))}
       lessons={(lessons ?? []).map((l) => ({
         id: l.id as string,
@@ -344,12 +348,13 @@ async function TrackEditor({
         rubric: (a.rubric as Record<string, string> | null) ?? {},
         success_criteria: ((a.success_criteria as string[] | null) ?? []) as string[],
         max_score: (a.max_score as number) ?? 100,
+        passing_score: ((a as { passing_score?: number }).passing_score ?? 80) as number,
       }))}
       rewards={(rewards ?? []).map((r) => ({
         id: r.id as string,
         module_id: r.module_id as string,
         ord: r.ord as number,
-        kind: r.kind as "letter" | "template" | "video" | "quote_card",
+        kind: r.kind as "letter" | "template" | "video" | "quote_card" | "image",
         title: r.title as string,
         description: (r.description as string | null) ?? "",
         content: (r.content as Record<string, unknown> | null) ?? {},

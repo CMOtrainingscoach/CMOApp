@@ -6,24 +6,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Loader2,
   ArrowLeft,
+  BookOpen,
   Puzzle,
   RotateCcw,
   Sparkles,
+  Skull,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import type {
   JargonSurfaceCell,
   JargonMiss,
-  StartPlJargonRoundResult,
+  JargonMatchRoundStartResult,
   GradePlJargonRoundResult,
 } from "@/lib/pl/jargon-match-actions";
 
-type Phase = "loading" | "play" | "grading" | "results";
+type Phase = "loading" | "play" | "grading" | "results" | "gameover";
 
 type DoneGrade = { score: number; total: number; misses: JargonMiss[] };
 
-type StartRoundFn = () => Promise<StartPlJargonRoundResult>;
+type StartRoundFn = () => Promise<JargonMatchRoundStartResult>;
 type GradeRoundFn = (opts: {
   roundId: string;
   submission: Record<string, string>;
@@ -33,6 +35,20 @@ type ValidatePairFn = (opts: {
   termId: string;
   defId: string;
 }) => Promise<{ ok: boolean } | { error: string }>;
+
+export type GameOverRevealRow = {
+  leftLabel: string;
+  rightLabel: string;
+  imageUrl?: string | null;
+};
+
+export type GameOverRevealFetchResult =
+  | { ok: true; rows: GameOverRevealRow[] }
+  | { ok: false; error: string };
+
+export type FetchGameOverAnswersFn = (
+  roundId: string,
+) => Promise<GameOverRevealFetchResult>;
 
 export type JargonMatchRunnerProps = {
   roundSize: number;
@@ -53,6 +69,21 @@ export type JargonMatchRunnerProps = {
   validatePair: ValidatePairFn;
   loadingAsideLine?: string;
   resultsAsideLine?: string;
+  /**
+   * When set (e.g. 5 for P&L), each failed pair check consumes one chance; at 0 remaining
+   * the round ends in game over until the player restarts.
+   */
+  wrongMatchLimit?: number;
+  /** Column heading above left stack (e.g. People). */
+  leftColumnTitle?: string;
+  /** Column heading above right stack (e.g. Known for). */
+  rightColumnTitle?: string;
+  /** When set, game-over screen fetches and lists correct pairings (e.g. Lifestyle lab). */
+  fetchGameOverAnswers?: FetchGameOverAnswersFn;
+  /** Heading above the answer key on game over (used with `fetchGameOverAnswers`). */
+  gameOverRevealTitle?: string;
+  /** Short line under the heading on game over. */
+  gameOverRevealSubtitle?: string;
 };
 
 export function JargonMatchRunner({
@@ -72,6 +103,13 @@ export function JargonMatchRunner({
   validatePair,
   loadingAsideLine = "Shuffling terms for your round…",
   resultsAsideLine = "Read the recap, then shuffle the desk — recognition is repetition with sharper labels.",
+  wrongMatchLimit,
+  leftColumnTitle = "Terms",
+  rightColumnTitle = "Definitions",
+  fetchGameOverAnswers,
+  gameOverRevealTitle = "Answer key",
+  gameOverRevealSubtitle =
+    "The correct pairings for this board — read them once, then restart for a fresh draw.",
 }: JargonMatchRunnerProps) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -88,6 +126,12 @@ export function JargonMatchRunner({
   const [feedbackErr, setFeedbackErr] = useState<string | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [tipIx, setTipIx] = useState(0);
+  const [wrongMatches, setWrongMatches] = useState(0);
+  const [gameOverRevealLoading, setGameOverRevealLoading] = useState(false);
+  const [gameOverRevealErr, setGameOverRevealErr] = useState<string | null>(null);
+  const [gameOverRevealRows, setGameOverRevealRows] = useState<
+    GameOverRevealRow[] | null
+  >(null);
 
   const submittedPairsRef = useRef<string>("");
 
@@ -106,6 +150,10 @@ export function JargonMatchRunner({
     setGradeResult(null);
     setFeedback(null);
     setFeedbackErr(null);
+    setWrongMatches(0);
+    setGameOverRevealLoading(false);
+    setGameOverRevealErr(null);
+    setGameOverRevealRows(null);
     const got = await startRound();
     if ("error" in got) {
       setLoadError(got.error);
@@ -130,6 +178,39 @@ export function JargonMatchRunner({
     );
     return () => window.clearInterval(id);
   }, [phase, professorTips.length]);
+
+  useEffect(() => {
+    if (
+      phase === "play" &&
+      wrongMatchLimit != null &&
+      wrongMatches >= wrongMatchLimit
+    ) {
+      setPhase("gameover");
+    }
+  }, [phase, wrongMatchLimit, wrongMatches]);
+
+  useEffect(() => {
+    if (phase !== "gameover" || !roundId || !fetchGameOverAnswers) {
+      return;
+    }
+    let cancelled = false;
+    setGameOverRevealLoading(true);
+    setGameOverRevealErr(null);
+    setGameOverRevealRows(null);
+    void (async () => {
+      const res = await fetchGameOverAnswers(roundId);
+      if (cancelled) return;
+      setGameOverRevealLoading(false);
+      if (!res.ok) {
+        setGameOverRevealErr(res.error);
+        return;
+      }
+      setGameOverRevealRows(res.rows);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, roundId, fetchGameOverAnswers]);
 
   const bumpShake = () => {
     setShake(true);
@@ -226,6 +307,9 @@ export function JargonMatchRunner({
         bumpShake();
         setPendTerm(null);
         setPendDef(null);
+        if (wrongMatchLimit != null) {
+          setWrongMatches((prev) => prev + 1);
+        }
         return;
       }
       submittedPairsRef.current = "";
@@ -266,6 +350,9 @@ export function JargonMatchRunner({
         bumpShake();
         setPendTerm(null);
         setPendDef(null);
+        if (wrongMatchLimit != null) {
+          setWrongMatches((prev) => prev + 1);
+        }
         return;
       }
       submittedPairsRef.current = "";
@@ -324,7 +411,10 @@ export function JargonMatchRunner({
             >
               <ArrowLeft className="size-3.5" /> {labBackLabel}
             </Link>
-            {(phase === "play" || phase === "grading" || phase === "results") && (
+            {(phase === "play" ||
+              phase === "grading" ||
+              phase === "results" ||
+              phase === "gameover") && (
               <button
                 type="button"
                 onClick={() => void loadRound()}
@@ -378,22 +468,50 @@ export function JargonMatchRunner({
           {phase === "play" && roundId && (
             <>
               <div
-                className="text-xs uppercase tracking-[0.2em] text-text-muted mb-2"
+                className="text-xs uppercase tracking-[0.2em] text-text-muted mb-2 flex flex-wrap items-center gap-x-4 gap-y-1"
                 aria-live="polite"
               >
-                Matched{" "}
-                <span className="text-gold-300">{Object.keys(paired).length}</span>
-                /{roundSize} · tap a locked chip to unlink
+                <span>
+                  Matched{" "}
+                  <span className="text-gold-300">
+                    {Object.keys(paired).length}
+                  </span>
+                  /{roundSize} · tap a locked chip to unlink
+                </span>
+                {wrongMatchLimit != null && (
+                  <span className="text-text-muted">
+                    Wrong matches:{" "}
+                    <span
+                      className={
+                        wrongMatches >= wrongMatchLimit - 1 && wrongMatches < wrongMatchLimit
+                          ? "text-amber-300"
+                          : wrongMatches >= wrongMatchLimit
+                            ? "text-red-300/90"
+                            : "text-gold-300/90"
+                      }
+                    >
+                      {wrongMatches}/{wrongMatchLimit}
+                    </span>
+                    {wrongMatchLimit - wrongMatches > 0 ? (
+                      <span className="text-text-muted">
+                        {" "}
+                        · {wrongMatchLimit - wrongMatches} chance
+                        {wrongMatchLimit - wrongMatches === 1 ? "" : "s"} left
+                      </span>
+                    ) : null}
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <h2 className="text-[10px] uppercase tracking-[0.2em] text-gold-300/90">
-                    Terms
+                    {leftColumnTitle}
                   </h2>
                   <div className="flex flex-col gap-2">
                     {terms.map((t) => {
                       const isPaired = Boolean(paired[t.id]);
                       const isHighlighted = pendTerm === t.id && !isPaired;
+                      const img = t.imageUrl?.trim();
                       return (
                         <button
                           key={t.id}
@@ -401,9 +519,9 @@ export function JargonMatchRunner({
                           onClick={() => void onTermTap(t.id)}
                           disabled={matching}
                           aria-pressed={isHighlighted || isPaired}
-                          aria-label={`Term: ${t.label}${isPaired ? ", paired" : ""}`}
+                          aria-label={`${leftColumnTitle}: ${t.label}${isPaired ? ", paired" : ""}`}
                           className={cn(
-                            "text-left rounded-xl border px-3 py-2.5 text-sm transition-colors disabled:opacity-60",
+                            "text-left rounded-xl border px-3 py-2.5 text-sm transition-colors disabled:opacity-60 flex items-center gap-3",
                             isPaired &&
                               "border-emerald-500/50 bg-emerald-500/[0.08] text-emerald-100",
                             !isPaired &&
@@ -414,7 +532,18 @@ export function JargonMatchRunner({
                               "border-white/12 bg-bg-card hover:border-gold-500/35",
                           )}
                         >
-                          {t.label}
+                          {img ? (
+                            <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/12 bg-bg-elevated">
+                              <Image
+                                src={img}
+                                alt=""
+                                fill
+                                className="object-cover"
+                                sizes="44px"
+                              />
+                            </span>
+                          ) : null}
+                          <span className="min-w-0 flex-1 leading-snug">{t.label}</span>
                         </button>
                       );
                     })}
@@ -422,7 +551,7 @@ export function JargonMatchRunner({
                 </div>
                 <div className="space-y-2">
                   <h2 className="text-[10px] uppercase tracking-[0.2em] text-gold-300/90">
-                    Definitions
+                    {rightColumnTitle}
                   </h2>
                   <div className="flex flex-col gap-2">
                     {defs.map((d) => {
@@ -435,7 +564,7 @@ export function JargonMatchRunner({
                           onClick={() => void onDefTap(d.id)}
                           disabled={matching}
                           aria-pressed={isHighlighted || blocked}
-                          aria-label={`Definition strip${blocked ? ", paired" : ""}`}
+                          aria-label={`${rightColumnTitle}: ${d.label.slice(0, 120)}${blocked ? ", paired" : ""}`}
                           className={cn(
                             "text-left rounded-xl border px-3 py-2.5 text-sm transition-colors disabled:opacity-60",
                             blocked &&
@@ -461,6 +590,89 @@ export function JargonMatchRunner({
                 </p>
               )}
             </>
+          )}
+
+          {phase === "gameover" && roundId && (
+            <div className="space-y-6" role="alert" aria-live="assertive">
+              <div className="card-premium border border-amber-500/30 bg-amber-500/[0.04] p-8 space-y-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-amber-300">
+                  <Skull className="size-3.5" /> Game over
+                </div>
+                <h2 className="font-display text-2xl sm:text-3xl tracking-tight text-text-primary">
+                  No chances left
+                </h2>
+                <p className="text-sm text-text-muted leading-relaxed max-w-lg">
+                  You used your{" "}
+                  <span className="text-amber-200/90">
+                    {wrongMatchLimit ?? 0} allowed wrong{" "}
+                    {(wrongMatchLimit ?? 0) === 1 ? "match" : "matches"}
+                  </span>
+                  . The desk locks until you restart — same mechanic, fresh draw,
+                  slower reads before you lock each pair.
+                </p>
+
+                {fetchGameOverAnswers && (
+                  <div className="mt-6 border-t border-white/10 pt-6 space-y-4 max-w-2xl">
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-gold-300/90">
+                      <BookOpen className="size-3.5" /> {gameOverRevealTitle}
+                    </div>
+                    <p className="text-xs text-text-muted leading-relaxed">
+                      {gameOverRevealSubtitle}
+                    </p>
+                    {gameOverRevealLoading && (
+                      <p className="text-sm text-text-muted flex items-center gap-2">
+                        <Loader2 className="size-4 animate-spin text-gold-400" />{" "}
+                        Loading answers…
+                      </p>
+                    )}
+                    {gameOverRevealErr && (
+                      <p className="text-sm text-amber-200/80">{gameOverRevealErr}</p>
+                    )}
+                    {gameOverRevealRows && gameOverRevealRows.length > 0 && (
+                      <ul className="space-y-3 text-sm">
+                        {gameOverRevealRows.map((r, i) => {
+                          const img = r.imageUrl?.trim();
+                          return (
+                            <li
+                              key={`${r.leftLabel}-${i}`}
+                              className="flex gap-3 items-start rounded-xl border border-white/[0.08] bg-bg-card/50 p-3"
+                            >
+                              {img ? (
+                                <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/12">
+                                  <Image
+                                    src={img}
+                                    alt=""
+                                    fill
+                                    className="object-cover"
+                                    sizes="40px"
+                                  />
+                                </span>
+                              ) : null}
+                              <div className="min-w-0 flex-1">
+                                <div className="font-medium text-text-primary">
+                                  {r.leftLabel}
+                                </div>
+                                <div className="mt-1 text-text-muted leading-relaxed">
+                                  {r.rightLabel}
+                                </div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => void loadRound()}
+                  className="btn-gold px-6 py-2.5 inline-flex items-center gap-2 text-sm"
+                >
+                  <RotateCcw className="size-4" /> Restart game
+                </button>
+              </div>
+            </div>
           )}
 
           {phase === "grading" && (
@@ -569,6 +781,11 @@ export function JargonMatchRunner({
           ) : phase === "results" ? (
             <p className="text-sm text-text-secondary leading-relaxed text-center">
               {resultsAsideLine}
+            </p>
+          ) : phase === "gameover" ? (
+            <p className="text-sm text-text-secondary leading-relaxed text-center">
+              Wrong matches add up fast on a real P&amp;L. Reset, breathe once,
+              and match with the CFO voice in your head.
             </p>
           ) : (
             <p className="text-sm text-text-muted leading-relaxed text-center">

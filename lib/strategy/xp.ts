@@ -19,7 +19,8 @@ export type XpSource =
   | "assignment_pass"
   | "module_complete"
   | "streak_week"
-  | "reading_complete";
+  | "reading_complete"
+  | "pl_sheet_drill";
 
 export const XP_AMOUNTS: Record<XpSource, number> = {
   lesson_complete: 50,
@@ -30,6 +31,7 @@ export const XP_AMOUNTS: Record<XpSource, number> = {
   module_complete: 150,
   streak_week: 100,
   reading_complete: 25,
+  pl_sheet_drill: 10,
 };
 
 /** Progress computed from configurable `xp_level_config` (levels 0–100). */

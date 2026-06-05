@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/admin";
 import { getProfessorConfigAdmin } from "@/lib/professor-config.server";
 import { createClient } from "@/lib/supabase/server";
 import { PlJargonMatchHeaderUploader } from "../pl-jargon-header-uploader";
+import { PlSheetDrillHeaderUploader } from "../pl-sheet-drill-header-uploader";
 import { StrategyJargonMatchHeaderUploader } from "../strategy-jargon-header-uploader";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +51,8 @@ export default async function AdminMinigamesPage() {
             Practice game headers
           </h1>
           <p className="text-text-muted text-sm leading-relaxed">
-            Upload wide hero images for the jargon matchup drills. Learners see them at the top of
-            each minigame; nothing else on this page.
+            Upload wide hero images for standalone practice minigames (jargon matchup and P&amp;L
+            sheet drill). Learners see them at the top of each screen; nothing else on this page.
           </p>
         </header>
 
@@ -74,6 +75,17 @@ export default async function AdminMinigamesPage() {
             <CardBody>
               <StrategyJargonMatchHeaderUploader
                 initialUrl={cfg.strategy_jargon_match_header_image_url}
+              />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>P&amp;L sheet drill</CardTitle>
+            </CardHeader>
+            <CardBody>
+              <PlSheetDrillHeaderUploader
+                initialUrl={cfg.pl_sheet_drill_header_image_url}
               />
             </CardBody>
           </Card>

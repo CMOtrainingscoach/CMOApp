@@ -101,7 +101,7 @@ export async function LabRewardPage(opts: {
           <RewardReveal
             rewards={visible.map((r) => ({
               id: r.id as string,
-              kind: r.kind as "letter" | "template" | "video" | "quote_card",
+              kind: r.kind as "letter" | "template" | "video" | "quote_card" | "image",
               title: r.title as string,
               description: (r.description as string | null) ?? null,
               content: (r.content ?? {}) as Record<string, unknown>,

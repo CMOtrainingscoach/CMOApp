@@ -1,6 +1,6 @@
 import "server-only";
 import { generateText } from "ai";
-import { openaiProvider, CHAT_MODEL } from "@/lib/openai";
+import { openaiProvider, CHAT_MODEL, isOpenAiConfigured } from "@/lib/openai";
 import { professorTeachingSystemForLab } from "@/lib/prompts";
 import { retrieveContext, renderRetrievedContext } from "@/lib/memory";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -21,7 +21,19 @@ function keyPointsArray(raw: unknown): string[] {
 
 const FALLBACK = (lesson: LessonRow) => `# ${lesson.title}
 
-The Professor is offline (no \`OPENAI_API_KEY\` set). When the key is configured, this lesson will be generated personally for you, using these key points as the spine:
+The Professor is offline (no usable \`OPENAI_API_KEY\` on the **server**). When the key is configured in \`.env.local\` or your host’s env and the app is restarted, this lesson will be generated personally for you, using these key points as the spine:
+
+${keyPointsArray(lesson.key_points)
+  .map((k) => `- ${k}`)
+  .join("\n")}
+
+**What would you do here?** Pick one of the key points above and apply it to a real company you know.`;
+
+const FALLBACK_AI_ERROR = (lesson: LessonRow) => `# ${lesson.title}
+
+The AI service did not return a lesson this time (model access, billing, rate limit, or network) — your key may still be configured. Retry shortly, or ask your admin to check server logs and **OPENAI_CHAT_MODEL**.
+
+Until then, work from these key points:
 
 ${keyPointsArray(lesson.key_points)
   .map((k) => `- ${k}`)
@@ -66,7 +78,7 @@ export async function getOrGenerateTheory(
     };
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (!isOpenAiConfigured()) {
     const body_md = FALLBACK(lesson);
     await admin.from("lesson_theory_cache").upsert(
       {
@@ -109,8 +121,11 @@ Now produce the lesson body in Markdown, following the required structure. Remem
     });
     body_md = text.trim();
   } catch (e) {
-    console.error("getOrGenerateTheory failed", e);
-    body_md = FALLBACK(lesson);
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("getOrGenerateTheory failed:", detail, e);
+    body_md = isOpenAiConfigured()
+      ? FALLBACK_AI_ERROR(lesson)
+      : FALLBACK(lesson);
   }
 
   const now = new Date().toISOString();

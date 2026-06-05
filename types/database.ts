@@ -174,6 +174,91 @@ export interface Database {
         >;
         Relationships: [];
       };
+      professor_mindmap_clusters: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          anchor_cluster_id: string;
+          slug: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["professor_mindmap_clusters"]["Row"],
+          "id" | "created_at" | "updated_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["professor_mindmap_clusters"]["Row"]
+        >;
+        Relationships: [];
+      };
+      professor_mindmap_topics: {
+        Row: {
+          id: string;
+          user_id: string;
+          conversation_id: string | null;
+          title: string;
+          recap: string;
+          cluster_id: string;
+          professor_cluster_id: string | null;
+          anchor_link_note: string | null;
+          embedding: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["professor_mindmap_topics"]["Row"],
+          "id" | "created_at" | "updated_at" | "embedding"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          embedding?: string | null;
+          professor_cluster_id?: string | null;
+          anchor_link_note?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["professor_mindmap_topics"]["Row"]
+        >;
+        Relationships: [];
+      };
+      executive_identity_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          question_bank_version: number;
+          current_phase_index: number;
+          status: string;
+          answers: Json;
+          conversation?: Json;
+          executive_identity_profile: Json | null;
+          final_report: Json | null;
+          brainmap: Json | null;
+          ui_state: Json | null;
+          generation_error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["executive_identity_sessions"]["Row"],
+          "id" | "created_at" | "updated_at" | "answers"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          answers?: Json;
+          conversation?: Json;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["executive_identity_sessions"]["Row"]
+        >;
+        Relationships: [];
+      };
       tasks: {
         Row: {
           id: string;
@@ -368,6 +453,34 @@ export interface Database {
         >;
         Relationships: [];
       };
+      cmo_life_milestones: {
+        Row: {
+          id: string;
+          sort_order: number;
+          title: string;
+          description: string | null;
+          milestone_kind: "lesson" | "custom";
+          lesson_id: string | null;
+          custom_detail: string | null;
+          reward_text: string | null;
+          reward_image_url: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["cmo_life_milestones"]["Row"],
+          "id" | "created_at" | "updated_at"
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["cmo_life_milestones"]["Row"]
+        >;
+        Relationships: [];
+      };
       pl_jargon_rounds: {
         Row: {
           id: string;
@@ -390,6 +503,58 @@ export interface Database {
         >;
         Relationships: [];
       };
+      pl_sheet_drill_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          difficulty: string;
+          scenario_id: string;
+          status: string;
+          attempts_used: number;
+          xp_awarded: boolean;
+          hint_md: string | null;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["pl_sheet_drill_sessions"]["Row"],
+          "id" | "created_at" | "attempts_used" | "xp_awarded" | "status" | "hint_md"
+        > & {
+          id?: string;
+          created_at?: string;
+          attempts_used?: number;
+          xp_awarded?: boolean;
+          status?: string;
+          hint_md?: string | null;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["pl_sheet_drill_sessions"]["Row"]
+        >;
+        Relationships: [];
+      };
+      lifestyle_scene_match_rounds: {
+        Row: {
+          id: string;
+          user_id: string;
+          scene: string;
+          terms_snapshot: Json;
+          defs_snapshot: Json;
+          correct_pairs: Json;
+          expires_at: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["lifestyle_scene_match_rounds"]["Row"],
+          "id" | "created_at"
+        > & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["lifestyle_scene_match_rounds"]["Row"]
+        >;
+        Relationships: [];
+      };
       strategy_jargon_rounds: {
         Row: {
           id: string;
@@ -409,6 +574,22 @@ export interface Database {
         };
         Update: Partial<
           Database["public"]["Tables"]["strategy_jargon_rounds"]["Row"]
+        >;
+        Relationships: [];
+      };
+      user_cmo_life_milestone_progress: {
+        Row: {
+          user_id: string;
+          milestone_id: string;
+          completed_at: string | null;
+          completion_source: "lesson_auto" | "user_self" | "admin";
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["user_cmo_life_milestone_progress"]["Row"],
+          "completion_source"
+        > & { completion_source?: "lesson_auto" | "user_self" | "admin" };
+        Update: Partial<
+          Database["public"]["Tables"]["user_cmo_life_milestone_progress"]["Row"]
         >;
         Relationships: [];
       };

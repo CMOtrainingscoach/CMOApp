@@ -27,6 +27,9 @@ async function fetchConfig(useServiceRole: boolean): Promise<ProfessorConfig> {
       strategy_jargon_match_header_image_url:
         (data as { strategy_jargon_match_header_image_url?: string | null })
           .strategy_jargon_match_header_image_url ?? null,
+      pl_sheet_drill_header_image_url:
+        (data as { pl_sheet_drill_header_image_url?: string | null })
+          .pl_sheet_drill_header_image_url ?? null,
       professor_persona:
         data.professor_persona ?? PROFESSOR_CONFIG_FALLBACK.professor_persona,
       professor_traits:

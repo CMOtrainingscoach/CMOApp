@@ -5,6 +5,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { Topbar } from "@/components/shell/topbar";
 import { TheoryBody } from "@/components/strategy/theory-body";
 import type { LabRouteBundle } from "@/lib/strategy/lab-routes";
+import { reconcileAssignmentPassIfNeeded } from "@/lib/strategy/grader";
 
 export async function LabReviewPage(opts: {
   lab: LabRouteBundle;
@@ -38,7 +39,7 @@ export async function LabReviewPage(opts: {
 
   const { data: assignment } = await admin
     .from("module_assignments")
-    .select("id, title")
+    .select("id, title, max_score, passing_score")
     .eq("module_id", module.id)
     .maybeSingle();
   if (!assignment) redirect(`${lab.basePath}/${trackSlug}`);
@@ -54,6 +55,10 @@ export async function LabReviewPage(opts: {
   const modHub = `${lab.basePath}/${trackSlug}/${moduleId}`;
   if (!submission) {
     redirect(`${modHub}/assignment`);
+  }
+
+  if (submission.status === "graded") {
+    await reconcileAssignmentPassIfNeeded(submission.id as string);
   }
 
   const { data: review } = await admin
@@ -85,6 +90,8 @@ export async function LabReviewPage(opts: {
 
   const passed = review?.verdict === "pass";
   const score = review?.score ?? 0;
+  const maxScore = (assignment?.max_score as number) ?? 100;
+  const passingScore = (assignment?.passing_score as number) ?? 80;
 
   return (
     <>
@@ -130,13 +137,20 @@ export async function LabReviewPage(opts: {
                   </div>
                   <div className="font-display text-5xl tracking-tight gold-text">
                     {score}
-                    <span className="text-text-muted text-2xl ml-1">/ 100</span>
+                    <span className="text-text-muted text-2xl ml-1">
+                      / {maxScore}
+                    </span>
                   </div>
                 </div>
+                <p className="mt-2 text-xs text-text-muted">
+                  Passing score: {passingScore} / {maxScore}
+                </p>
                 <div className="mt-4 skill-bar-track">
                   <div
                     className="skill-bar-fill"
-                    style={{ width: `${Math.min(100, score)}%` }}
+                    style={{
+                      width: `${Math.min(100, maxScore > 0 ? (score / maxScore) * 100 : 0)}%`,
+                    }}
                   />
                 </div>
               </div>
@@ -241,7 +255,7 @@ export async function LabReviewPage(opts: {
                 <p className="mt-2 text-sm text-text-muted leading-relaxed">
                   {passed
                     ? "Your work is at CMO-track standard. Module unlocked."
-                    : "You're directionally correct but missing rigor. Sharpen the gaps and try again."}
+                    : `You need at least ${passingScore} / ${maxScore} with no required revisions to pass. Sharpen the gaps and try again.`}
                 </p>
               </div>
             </aside>

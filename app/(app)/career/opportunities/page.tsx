@@ -1,3 +1,4 @@
+import { isOpenAiConfigured } from "@/lib/openai";
 import { Topbar } from "@/components/shell/topbar";
 import { CareerWorkbench } from "@/components/career/career-workbench";
 import { createClient } from "@/lib/supabase/server";
@@ -20,7 +21,7 @@ export default async function CareerOpportunitiesPage() {
     : { data: null };
 
   const hasTavily = Boolean(process.env.TAVILY_API_KEY?.trim());
-  const hasOpenAi = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const hasOpenAi = isOpenAiConfigured();
 
   let readyDocs:
     | { id: string; title: string; status: string }[]

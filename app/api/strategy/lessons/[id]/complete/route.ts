@@ -94,11 +94,21 @@ export async function POST(
   const nextLesson = siblings?.find((s) => (s.ord as number) > currentOrd) ?? null;
   const isLastLesson = !nextLesson;
 
+  const { data: modRow } = await admin
+    .from("strategy_modules")
+    .select("assignment_required")
+    .eq("id", lesson.module_id)
+    .maybeSingle();
+  const assignmentRequired =
+    (modRow as { assignment_required?: boolean } | null)?.assignment_required !==
+    false;
+
   return NextResponse.json({
     completed: true,
     xp_awarded,
     next_lesson_id: nextLesson?.id ?? null,
     is_last_lesson: isLastLesson,
+    assignment_required: assignmentRequired,
     module_id: lesson.module_id,
   });
 }

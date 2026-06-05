@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   clearPlJargonMatchHeader,
+  clearPlSheetDrillHeader,
   clearStrategyJargonMatchHeader,
   uploadPlJargonMatchHeader,
+  uploadPlSheetDrillHeader,
   uploadStrategyJargonMatchHeader,
 } from "./actions";
 
-type Variant = "pl" | "strategy";
+type Variant = "pl" | "strategy" | "plSheetDrill";
 
 type Props = {
   variant: Variant;
@@ -47,7 +49,9 @@ export function MinigameBannerUploader({
         const res =
           variant === "pl" ?
             await uploadPlJargonMatchHeader(fd)
-          : await uploadStrategyJargonMatchHeader(fd);
+          : variant === "strategy" ?
+            await uploadStrategyJargonMatchHeader(fd)
+          : await uploadPlSheetDrillHeader(fd);
         setUrl(res.url);
         router.refresh();
       } catch (e) {
@@ -76,7 +80,8 @@ export function MinigameBannerUploader({
     setError(null);
     try {
       if (variant === "pl") await clearPlJargonMatchHeader();
-      else await clearStrategyJargonMatchHeader();
+      else if (variant === "strategy") await clearStrategyJargonMatchHeader();
+      else await clearPlSheetDrillHeader();
       setUrl(null);
       router.refresh();
     } catch (e) {

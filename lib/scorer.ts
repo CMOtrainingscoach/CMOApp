@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { generateObject } from "ai";
-import { openaiProvider, CHAT_MODEL } from "./openai";
+import { openaiProvider, CHAT_MODEL, isOpenAiConfigured } from "./openai";
 import { SCORER_SYSTEM } from "./prompts";
 import { createServiceRoleClient } from "./supabase/server";
 import type { SkillKey } from "@/types/database";
@@ -37,8 +37,22 @@ export type SubmissionEvaluation = z.infer<typeof scoreSchema>;
 const FALLBACK: SubmissionEvaluation = {
   score: 60,
   strengths: ["Submission received."],
-  gaps: ["Awaiting AI evaluation — set OPENAI_API_KEY to enable detailed scoring."],
-  next_steps: ["Configure your OpenAI key, then resubmit for scoring."],
+  gaps: [
+    "Awaiting AI evaluation — add OPENAI_API_KEY to the **server** environment and restart.",
+  ],
+  next_steps: [
+    "Use .env.local (local) or your host’s env settings; client-only vars are not available to API routes.",
+  ],
+  skill_deltas: [],
+};
+
+const AI_SERVICE_ERROR: SubmissionEvaluation = {
+  score: 60,
+  strengths: ["Submission received."],
+  gaps: [
+    "The AI scorer request failed. If OPENAI_API_KEY is set on the server, check model access (OPENAI_CHAT_MODEL), billing, and rate limits.",
+  ],
+  next_steps: ["Check server logs for the error, wait a moment, and resubmit."],
   skill_deltas: [],
 };
 
@@ -48,7 +62,7 @@ export async function evaluateSubmission(opts: {
   taskCategory: string | null;
   submission: string;
 }): Promise<SubmissionEvaluation> {
-  if (!process.env.OPENAI_API_KEY) return FALLBACK;
+  if (!isOpenAiConfigured()) return FALLBACK;
   try {
     const { object } = await generateObject({
       model: openaiProvider(CHAT_MODEL),
@@ -67,8 +81,9 @@ Evaluate honestly per your rubric.`,
     });
     return object;
   } catch (e) {
-    console.error("evaluateSubmission failed", e);
-    return FALLBACK;
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("evaluateSubmission failed:", detail, e);
+    return AI_SERVICE_ERROR;
   }
 }
 

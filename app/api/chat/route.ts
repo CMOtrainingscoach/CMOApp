@@ -11,6 +11,8 @@ import { buildProfessorSystemPrompt } from "@/lib/professor-config";
 import { getProfessorConfig } from "@/lib/professor-config.server";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { loadStrategyLessonAnchor } from "@/lib/strategy/lesson-chat-anchor";
+import { getExecutiveIdentityDossiersPromptBlock } from "@/lib/career/identity-assessment/professor-chat-context";
+import { upsertProfessorMindmapTopic } from "@/lib/progress/upsert-professor-mindmap-topic";
 
 export const maxDuration = 60;
 
@@ -82,20 +84,30 @@ export async function POST(req: Request) {
   // Build retrieval context using the latest user message
   const ctx = await retrieveContext(user.id, lastUserText, 8);
 
-  // Profile snippet + admin-configured Professor identity
-  const [{ data: profile }, professorCfg] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, headline, persona_summary")
-      .eq("id", user.id)
-      .maybeSingle(),
-    getProfessorConfig(),
-  ]);
+  // Profile + dossiers + admin-configured Professor identity
+  const [{ data: profile }, professorCfg, identityDossiersBlock] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("display_name, headline, persona_summary")
+        .eq("id", user.id)
+        .maybeSingle(),
+      getProfessorConfig(),
+      getExecutiveIdentityDossiersPromptBlock(user.id),
+    ]);
 
   const compiledProfessorPrompt = buildProfessorSystemPrompt(
     professorCfg,
     PROFESSOR_SYSTEM,
   );
+
+  const identitySection = identityDossiersBlock
+    ? `
+
+EXECUTIVE IDENTITY DOSSIERS (Career Lab — completed assessments; treat as vetted background on ambitions, positioning, risks, roadmap):
+${identityDossiersBlock}
+`
+    : "";
 
   const systemMessage = `${compiledProfessorPrompt}${lessonAnchorBlock}
 
@@ -103,7 +115,7 @@ USER PROFILE:
 - Name: ${profile?.display_name ?? "the user"}
 - Headline: ${profile?.headline ?? "CMO in the making"}
 - Notes: ${profile?.persona_summary ?? "no persona summary yet."}
-
+${identitySection}
 CONTEXT (retrieved from this user's memory + documents):
 ${renderRetrievedContext(ctx)}`;
 
@@ -143,6 +155,7 @@ ${renderRetrievedContext(ctx)}`;
           { role: "assistant", content: text },
         ];
         await extractAndStoreMemories(user.id, fullConv, msg?.id);
+        await upsertProfessorMindmapTopic(user.id, conversationId!, fullConv);
       } catch (e) {
         console.error("chat onFinish persistence failed", e);
       }

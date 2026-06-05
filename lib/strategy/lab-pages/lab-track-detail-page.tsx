@@ -41,7 +41,7 @@ export async function LabTrackDetailPage(opts: {
         .maybeSingle(),
       admin
         .from("strategy_modules")
-        .select("id, ord, title, summary, description, xp_reward")
+        .select("id, ord, title, summary, description, xp_reward, assignment_required")
         .eq("track_id", track.id)
         .order("ord", { ascending: true }),
       admin
@@ -214,7 +214,19 @@ export async function LabTrackDetailPage(opts: {
                 completed.has(l.id as string),
               ).length;
               const unlocked = unlockMap.get(m.id as string) ?? false;
-              const passed = passedModuleIds.has(m.id as string);
+              const assignmentRequired =
+                (m as { assignment_required?: boolean }).assignment_required !==
+                false;
+              const lessonsDone =
+                lessons.length > 0 && lessonsCompleted === lessons.length;
+              const passedAssignment = passedModuleIds.has(m.id as string);
+              const passed =
+                passedAssignment || (!assignmentRequired && lessonsDone);
+              const prevModule = i > 0 ? (modules ?? [])[i - 1] : null;
+              const prevAssignmentRequired =
+                prevModule &&
+                (prevModule as { assignment_required?: boolean })
+                  .assignment_required !== false;
               const isLast = i === (modules ?? []).length - 1;
               return (
                 <li key={m.id as string} className="relative">
@@ -255,6 +267,8 @@ export async function LabTrackDetailPage(opts: {
                         xpReward={m.xp_reward as number}
                         unlocked={unlocked}
                         passed={passed}
+                        assignmentRequired={assignmentRequired}
+                        prevAssignmentRequired={prevAssignmentRequired ?? true}
                         lessonsCompleted={lessonsCompleted}
                         lessonsTotal={lessons.length}
                         books={booksByModule.get(m.id as string) ?? []}
@@ -288,6 +302,8 @@ function ModuleCard({
   xpReward,
   unlocked,
   passed,
+  assignmentRequired,
+  prevAssignmentRequired,
   lessonsCompleted,
   lessonsTotal,
   books,
@@ -302,6 +318,8 @@ function ModuleCard({
   xpReward: number;
   unlocked: boolean;
   passed: boolean;
+  assignmentRequired: boolean;
+  prevAssignmentRequired: boolean;
   lessonsCompleted: number;
   lessonsTotal: number;
   books: {
@@ -461,7 +479,9 @@ function ModuleCard({
               <span className="flex items-center gap-3 min-w-0">
                 <Trophy className="size-4 text-gold-300" />
                 <span className="text-sm text-gold-200 font-medium">
-                  End-of-module assignment
+                  {assignmentRequired
+                    ? "End-of-module assignment"
+                    : "Optional assignment"}
                 </span>
               </span>
               <ArrowRight className="size-4 text-gold-300" />
@@ -472,7 +492,9 @@ function ModuleCard({
 
       {!unlocked && (
         <p className="mt-5 text-xs text-text-muted italic">
-          Pass the previous module&apos;s assignment to unlock.
+          {prevAssignmentRequired
+            ? "Pass the previous module's assignment to unlock."
+            : "Complete all lessons in the previous module to unlock."}
         </p>
       )}
     </div>

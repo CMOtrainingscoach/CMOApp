@@ -26,6 +26,8 @@ type Props = {
   questions: RunnerQuestion[];
   /** e.g. `/strategy-lab` or `/pl-lab` — used for post-completion navigation */
   labBasePath: string;
+  /** When false, last lesson returns to the track instead of the assignment. */
+  assignmentRequired?: boolean;
   /** Sidebar copy below "Operator's note" on the theory step */
   operatorAsideNote?: string;
 };
@@ -42,6 +44,7 @@ export function LessonRunner({
   theoryMd,
   questions,
   labBasePath,
+  assignmentRequired = true,
   operatorAsideNote = "Strategy is the discipline of choosing where not to play. Every lesson is a chance to practise that choice.",
 }: Props) {
   const router = useRouter();
@@ -84,6 +87,7 @@ export function LessonRunner({
       const data = (await res.json()) as {
         next_lesson_id?: string | null;
         is_last_lesson?: boolean;
+        assignment_required?: boolean;
         error?: string;
       };
 
@@ -100,7 +104,13 @@ export function LessonRunner({
       }
 
       if (data.is_last_lesson) {
-        router.push(path("/assignment"));
+        const needsAssignment =
+          data.assignment_required ?? assignmentRequired;
+        if (needsAssignment) {
+          router.push(path("/assignment"));
+        } else {
+          router.push(`${labBasePath}/${trackSlug}`);
+        }
         return;
       }
       if (next) {

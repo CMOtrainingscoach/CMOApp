@@ -39,7 +39,7 @@ export async function LabLessonPage(opts: {
 
   const { data: module } = await admin
     .from("strategy_modules")
-    .select("id, ord, title, summary, track_id")
+    .select("id, ord, title, summary, track_id, assignment_required")
     .eq("id", moduleId)
     .eq("track_id", track.id)
     .maybeSingle();
@@ -196,6 +196,10 @@ export async function LabLessonPage(opts: {
           theoryMd={theory.body_md}
           questions={minigame.questions}
           labBasePath={lab.basePath}
+          assignmentRequired={
+            (module as { assignment_required?: boolean }).assignment_required !==
+            false
+          }
           operatorAsideNote={operatorAside}
         />
       </div>

@@ -5,6 +5,7 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { Topbar } from "@/components/shell/topbar";
 import type { LabRouteBundle } from "@/lib/strategy/lab-routes";
 import { AssignmentForm } from "@/components/strategy/assignment-form";
+import { reconcileAssignmentPassIfNeeded } from "@/lib/strategy/grader";
 
 export async function LabAssignmentPage(opts: {
   lab: LabRouteBundle;
@@ -38,12 +39,12 @@ export async function LabAssignmentPage(opts: {
 
   const { data: assignment } = await admin
     .from("module_assignments")
-    .select("id, title, prompt, rubric, success_criteria, max_score")
+    .select("id, title, prompt, rubric, success_criteria, max_score, passing_score")
     .eq("module_id", module.id)
     .maybeSingle();
   if (!assignment) redirect(`${lab.basePath}/${trackSlug}`);
 
-  const [{ data: profile }, { data: lastSubmission }] = await Promise.all([
+  const [{ data: profile }, { data: lastSubmissionFetched }] = await Promise.all([
     supabase
       .from("profiles")
       .select("display_name, avatar_url")
@@ -51,7 +52,9 @@ export async function LabAssignmentPage(opts: {
       .maybeSingle(),
     admin
       .from("assignment_submissions")
-      .select("id, status, created_at, content")
+      .select(
+        "id, status, created_at, content, assignment_reviews(verdict)",
+      )
       .eq("user_id", user.id)
       .eq("assignment_id", assignment.id)
       .order("created_at", { ascending: false })
@@ -59,10 +62,36 @@ export async function LabAssignmentPage(opts: {
       .maybeSingle(),
   ]);
 
+  let lastSubmission = lastSubmissionFetched;
+  if (lastSubmission?.status === "graded" && lastSubmission.id) {
+    await reconcileAssignmentPassIfNeeded(lastSubmission.id as string);
+    const { data: refreshed } = await admin
+      .from("assignment_submissions")
+      .select(
+        "id, status, created_at, content, assignment_reviews(verdict)",
+      )
+      .eq("id", lastSubmission.id)
+      .maybeSingle();
+    if (refreshed) lastSubmission = refreshed;
+  }
+
   const modHub = `${lab.basePath}/${trackSlug}/${moduleId}`;
 
+  type ReviewJoin = { verdict: string } | { verdict: string }[] | null;
+  const revJoin = lastSubmission
+    ? (lastSubmission as { assignment_reviews?: ReviewJoin }).assignment_reviews
+    : null;
+  const lastVerdict = Array.isArray(revJoin)
+    ? revJoin[0]?.verdict
+    : revJoin?.verdict;
+
   if (lastSubmission?.status === "graded") {
-    redirect(`${modHub}/review`);
+    if (!lastVerdict) {
+      redirect(`${modHub}/review`);
+    }
+    if (lastVerdict === "pass") {
+      redirect(`${modHub}/review`);
+    }
   }
 
   const rubricEntries = Object.entries(
@@ -113,6 +142,11 @@ export async function LabAssignmentPage(opts: {
               trackSlug={trackSlug}
               moduleId={module.id as string}
               labBasePath={lab.basePath}
+              initialContent={
+                lastSubmission?.status === "graded" && lastVerdict === "revision"
+                  ? ((lastSubmission as { content?: string }).content ?? "")
+                  : ""
+              }
             />
           </div>
 
@@ -147,7 +181,9 @@ export async function LabAssignmentPage(opts: {
                 ))}
               </dl>
               <p className="mt-4 text-[11px] uppercase tracking-[0.18em] text-text-muted">
-                Pass score: 70 / {assignment.max_score}
+                Passing score:{" "}
+                {(assignment.passing_score as number) ?? 80} /{" "}
+                {assignment.max_score as number}
               </p>
             </div>
           </aside>

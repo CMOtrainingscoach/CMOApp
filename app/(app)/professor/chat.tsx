@@ -112,6 +112,11 @@ export function ProfessorChat({
     [history],
   );
 
+  const chatBody = useMemo(
+    () => ({ conversationId: activeId }),
+    [activeId],
+  );
+
   const {
     messages,
     input,
@@ -121,8 +126,26 @@ export function ProfessorChat({
     setMessages,
   } = useChat({
     api: "/api/chat",
-    body: { conversationId: activeId },
+    body: chatBody,
     initialMessages,
+    onResponse: (response) => {
+      const cid = response.headers.get("x-conversation-id");
+      if (!cid) return;
+      setActiveId((prev) => (prev == null ? cid : prev));
+      setConvList((prev) => {
+        if (prev.some((c) => c.id === cid)) return prev;
+        const now = new Date().toISOString();
+        return [
+          {
+            id: cid,
+            title: null,
+            updated_at: now,
+            kind: "general",
+          },
+          ...prev,
+        ];
+      });
+    },
   });
 
   // Load conversation history when active id changes

@@ -8,6 +8,7 @@ import {
   ArrowRight,
   TrendingUp,
   Puzzle,
+  Map,
 } from "lucide-react";
 import { Topbar } from "@/components/shell/topbar";
 import {
@@ -76,6 +77,27 @@ export default async function AdminPage() {
                 className="btn-gold px-4 py-2 inline-flex items-center gap-2 text-sm"
               >
                 Open minigame headers
+                <ArrowRight className="size-4" />
+              </Link>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                <Map className="size-3.5" /> CMO Life roadmap
+              </CardTitle>
+            </CardHeader>
+            <CardBody>
+              <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                Define the global, sequential Progress tab path: lesson-linked and custom
+                milestones with optional rewards (copy and images).
+              </p>
+              <Link
+                href="/admin/cmo-life"
+                className="btn-gold px-4 py-2 inline-flex items-center gap-2 text-sm"
+              >
+                Edit CMO Life
                 <ArrowRight className="size-4" />
               </Link>
             </CardBody>

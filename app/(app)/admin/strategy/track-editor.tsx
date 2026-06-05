@@ -25,6 +25,8 @@ import {
   replaceModuleBooks,
 } from "./actions";
 import { LessonHeroUploader } from "./lesson-hero-uploader";
+import { RewardImageUploader } from "./reward-image-uploader";
+import { RewardVideoUploader } from "./reward-video-uploader";
 
 type ModuleT = {
   id: string;
@@ -33,6 +35,7 @@ type ModuleT = {
   summary: string;
   description: string;
   xp_reward: number;
+  assignment_required: boolean;
 };
 type LessonT = {
   id: string;
@@ -53,12 +56,13 @@ type AssignmentT = {
   rubric: Record<string, string>;
   success_criteria: string[];
   max_score: number;
+  passing_score: number;
 };
 type RewardT = {
   id: string;
   module_id: string;
   ord: number;
-  kind: "letter" | "template" | "video" | "quote_card";
+  kind: "letter" | "template" | "video" | "quote_card" | "image";
   title: string;
   description: string;
   content: Record<string, unknown>;
@@ -109,6 +113,16 @@ export function TrackEditorClient({
                 No modules yet. Add the first one below.
               </p>
             )}
+            {modules.length > 0 && (
+              <p className="text-xs text-text-muted">
+                Use <strong className="text-text-secondary font-medium">Edit</strong>{" "}
+                on a module to configure the graded assignment unlock:{" "}
+                <strong className="text-text-secondary font-medium">
+                  Professor completion rewards
+                </strong>{" "}
+                (letter, template, quote card, …) alongside module XP.
+              </p>
+            )}
             <ul className="space-y-2">
               {modules.map((m) => (
                 <li
@@ -124,6 +138,7 @@ export function TrackEditorClient({
                     module={m}
                     active={activeModuleId === m.id}
                     onSelect={() => setActiveModuleId(m.id)}
+                    rewards={rewards.filter((r) => r.module_id === m.id)}
                   />
                 </li>
               ))}
@@ -140,14 +155,11 @@ export function TrackEditorClient({
             lessons={lessons.filter((l) => l.module_id === activeModule.id)}
           />
           <AssignmentBlock
+            key={activeModule.id}
             module={activeModule}
             assignment={
               assignments.find((a) => a.module_id === activeModule.id) ?? null
             }
-          />
-          <RewardsBlock
-            module={activeModule}
-            rewards={rewards.filter((r) => r.module_id === activeModule.id)}
           />
           <BooksBlock
             module={activeModule}
@@ -164,11 +176,13 @@ function ModuleRow({
   module,
   active,
   onSelect,
+  rewards: moduleRewards,
 }: {
   trackId: string;
   module: ModuleT;
   active: boolean;
   onSelect: () => void;
+  rewards: RewardT[];
 }) {
   const [pending, start] = useTransition();
   const [editing, setEditing] = useState(false);
@@ -199,6 +213,7 @@ function ModuleRow({
         </button>
         <div className="flex items-center gap-1.5">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => setEditing((v) => !v)}
@@ -206,6 +221,7 @@ function ModuleRow({
             {editing ? "Close" : "Edit"}
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={() => {
@@ -222,58 +238,94 @@ function ModuleRow({
         </div>
       </div>
       {editing && (
-        <form
-          className="grid gap-3 pt-2 sm:grid-cols-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            start(async () => {
-              await upsertModule({
-                id: module.id,
-                track_id: trackId,
-                ord: draft.ord,
-                title: draft.title,
-                summary: draft.summary,
-                description: draft.description,
-                xp_reward: draft.xp_reward,
+        <div className="space-y-3 pt-2">
+          <form
+            className="grid gap-3 sm:grid-cols-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              start(async () => {
+                await upsertModule({
+                  id: module.id,
+                  track_id: trackId,
+                  ord: draft.ord,
+                  title: draft.title,
+                  summary: draft.summary,
+                  description: draft.description,
+                  xp_reward: draft.xp_reward,
+                  assignment_required: draft.assignment_required,
+                });
+                setEditing(false);
               });
-              setEditing(false);
-            });
-          }}
-        >
-          <input
-            className="input-field sm:col-span-3"
-            placeholder="Title"
-            value={draft.title}
-            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-          />
-          <input
-            className="input-field sm:col-span-3"
-            placeholder="Summary (one line)"
-            value={draft.summary}
-            onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
-          />
-          <textarea
-            className="input-field sm:col-span-3"
-            placeholder="Description"
-            rows={3}
-            value={draft.description}
-            onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-          />
-          <NumberField
-            label="Order"
-            value={draft.ord}
-            onChange={(n) => setDraft({ ...draft, ord: n })}
-          />
-          <NumberField
-            label="XP reward"
-            value={draft.xp_reward}
-            onChange={(n) => setDraft({ ...draft, xp_reward: n })}
-          />
-          <Button type="submit" disabled={pending} variant="gold">
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-            Save module
-          </Button>
-        </form>
+            }}
+          >
+            <input
+              className="input-field sm:col-span-3"
+              placeholder="Title"
+              value={draft.title}
+              onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            />
+            <input
+              className="input-field sm:col-span-3"
+              placeholder="Summary (one line)"
+              value={draft.summary}
+              onChange={(e) => setDraft({ ...draft, summary: e.target.value })}
+            />
+            <textarea
+              className="input-field sm:col-span-3"
+              placeholder="Description"
+              rows={3}
+              value={draft.description}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+            />
+            <NumberField
+              label="Order"
+              value={draft.ord}
+              onChange={(n) => setDraft({ ...draft, ord: n })}
+            />
+            <NumberField
+              label="XP reward"
+              value={draft.xp_reward}
+              onChange={(n) => setDraft({ ...draft, xp_reward: n })}
+            />
+            <Button type="submit" disabled={pending} variant="gold">
+              {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              Save module
+            </Button>
+          </form>
+
+          <div className="rounded-xl border border-border-subtle bg-white/[0.02] p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <Award className="size-4 text-gold-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-gold-500/95">
+                  Completion reward · Professor
+                </p>
+                <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                  Unlocked when the learner passes this module&apos;s graded
+                  assignment. Use <strong className="text-text-secondary font-medium">Save reward</strong>{" "}
+                  for each reward; it is independent of <strong className="text-text-secondary font-medium">Save module</strong>{" "}
+                  (buttons below won&apos;t close this panel).
+                </p>
+                <p className="text-[11px] text-text-muted/90 mt-2 leading-relaxed">
+                  For <strong className="text-text-secondary font-medium">Image</strong>{" "}
+                  or <strong className="text-text-secondary font-medium">Video</strong>{" "}
+                  rewards, save once, then upload a file (see limits on the uploader).
+                </p>
+              </div>
+            </div>
+            {moduleRewards.length === 0 && (
+              <p className="text-sm text-text-muted italic pl-6">
+                No reward yet — add one below.
+              </p>
+            )}
+            {moduleRewards.map((r) => (
+              <RewardEditor key={r.id} reward={r} />
+            ))}
+            <div className="pl-6">
+              <NewRewardRow moduleId={module.id} nextOrd={moduleRewards.length} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -581,6 +633,9 @@ function AssignmentBlock({
   assignment: AssignmentT | null;
 }) {
   const [pending, start] = useTransition();
+  const [assignmentRequired, setAssignmentRequired] = useState(
+    module.assignment_required,
+  );
   const [draft, setDraft] = useState<AssignmentT>(
     assignment ?? {
       id: "",
@@ -590,6 +645,7 @@ function AssignmentBlock({
       rubric: {},
       success_criteria: [],
       max_score: 100,
+      passing_score: 80,
     },
   );
   const [rubricText, setRubricText] = useState(
@@ -599,6 +655,25 @@ function AssignmentBlock({
     draft.success_criteria.join("\n"),
   );
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setAssignmentRequired(module.assignment_required);
+  }, [module.id, module.assignment_required]);
+
+  const saveRequiredToggle = (next: boolean) => {
+    setAssignmentRequired(next);
+    start(async () => {
+      await upsertModule({
+        id: module.id,
+        ord: module.ord,
+        title: module.title,
+        summary: module.summary,
+        description: module.description,
+        xp_reward: module.xp_reward,
+        assignment_required: next,
+      });
+    });
+  };
 
   const save = () => {
     setError(null);
@@ -622,6 +697,7 @@ function AssignmentBlock({
         rubric,
         success_criteria: criteria,
         max_score: draft.max_score,
+        passing_score: draft.passing_score,
       });
     });
   };
@@ -634,6 +710,37 @@ function AssignmentBlock({
         </CardTitle>
       </CardHeader>
       <CardBody className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-border-subtle bg-white/[0.02] px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-text-primary">
+              Require assignment to unlock next module
+            </p>
+            <p className="text-xs text-text-muted mt-1 leading-relaxed max-w-xl">
+              {assignmentRequired
+                ? "Learners must pass this graded assignment before the next module opens."
+                : "Off — finishing all lessons in this module is enough; the assignment stays optional."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={assignmentRequired}
+            aria-label="Require assignment to unlock next module"
+            disabled={pending}
+            onClick={() => saveRequiredToggle(!assignmentRequired)}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors ${
+              assignmentRequired
+                ? "border-gold-500/50 bg-gold-500/25"
+                : "border-white/15 bg-white/10"
+            }`}
+          >
+            <span
+              className={`inline-block size-5 rounded-full bg-white shadow transition-transform ${
+                assignmentRequired ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
         <input
           className="input-field"
           placeholder="Assignment title"
@@ -673,6 +780,12 @@ function AssignmentBlock({
           label="Max score"
           value={draft.max_score}
           onChange={(n) => setDraft({ ...draft, max_score: n })}
+        />
+        <NumberField
+          label="Passing score (minimum to pass)"
+          value={draft.passing_score}
+          onChange={(n) => setDraft({ ...draft, passing_score: n })}
+          hint="Typically 80 when max score is 100. Must be ≤ max score."
         />
         {error && <p className="text-red-400 text-sm">{error}</p>}
         <div className="flex justify-end">
@@ -889,47 +1002,63 @@ function rowToDrafts(rows: ModuleBookRowT[]): ModuleBookDraft[] {
     }));
 }
 
-function RewardsBlock({
-  module,
-  rewards,
-}: {
-  module: ModuleT;
-  rewards: RewardT[];
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <Award className="size-3.5" /> Rewards · {module.title}
-        </CardTitle>
-      </CardHeader>
-      <CardBody className="space-y-3">
-        {rewards.length === 0 && (
-          <p className="text-sm text-text-muted italic">
-            No rewards yet. Add one to celebrate the user's win.
-          </p>
-        )}
-        {rewards.map((r) => (
-          <RewardEditor key={r.id} reward={r} />
-        ))}
-        <NewRewardRow moduleId={module.id} nextOrd={rewards.length} />
-      </CardBody>
-    </Card>
-  );
-}
-
 function RewardEditor({ reward }: { reward: RewardT }) {
   const [pending, start] = useTransition();
   const [draft, setDraft] = useState(reward);
-  const [contentText, setContentText] = useState(
-    JSON.stringify(reward.content, null, 2),
+  const [contentText, setContentText] = useState(() =>
+    JSON.stringify(reward.content ?? {}, null, 2),
+  );
+  const [caption, setCaption] = useState(() =>
+    typeof reward.content?.caption === "string" ? reward.content.caption : "",
   );
   const [error, setError] = useState<string | null>(null);
+
+  const contentSignature = JSON.stringify(reward.content ?? {});
+
+  useEffect(() => {
+    setDraft(reward);
+    setContentText(JSON.stringify(reward.content ?? {}, null, 2));
+    setCaption(
+      typeof reward.content?.caption === "string" ? reward.content.caption : "",
+    );
+  }, [
+    reward.id,
+    reward.module_id,
+    reward.kind,
+    reward.title,
+    reward.description,
+    reward.ord,
+    contentSignature,
+  ]);
+
+  const imageUrl =
+    typeof draft.content?.image_url === "string" &&
+    draft.content.image_url.startsWith("http")
+      ? draft.content.image_url
+      : null;
+
+  const videoUrl =
+    typeof draft.content?.video_url === "string" &&
+    draft.content.video_url.startsWith("http")
+      ? draft.content.video_url
+      : null;
 
   const save = () => {
     setError(null);
     let content: Record<string, unknown> = {};
-    if (contentText.trim()) {
+
+    if (draft.kind === "image" || draft.kind === "video") {
+      content = {
+        ...(typeof draft.content === "object" &&
+        draft.content !== null &&
+        !Array.isArray(draft.content)
+          ? draft.content
+          : {}),
+      };
+      const cap = caption.trim();
+      if (cap) content.caption = cap;
+      else delete content.caption;
+    } else if (contentText.trim()) {
       try {
         content = JSON.parse(contentText) as Record<string, unknown>;
       } catch {
@@ -937,6 +1066,7 @@ function RewardEditor({ reward }: { reward: RewardT }) {
         return;
       }
     }
+
     start(async () => {
       await upsertReward({
         id: draft.id,
@@ -964,6 +1094,7 @@ function RewardEditor({ reward }: { reward: RewardT }) {
           <option value="template">Template</option>
           <option value="quote_card">Quote card</option>
           <option value="video">Video</option>
+          <option value="image">Image</option>
         </select>
         <input
           className="input-field sm:col-span-2"
@@ -978,17 +1109,53 @@ function RewardEditor({ reward }: { reward: RewardT }) {
           value={draft.description}
           onChange={(e) => setDraft({ ...draft, description: e.target.value })}
         />
-        <div className="sm:col-span-3">
-          <label className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
-            Content (JSON shape per kind)
-          </label>
-          <textarea
-            className="input-field font-mono text-xs"
-            rows={5}
-            value={contentText}
-            onChange={(e) => setContentText(e.target.value)}
-          />
-        </div>
+        {draft.kind === "image" && (
+          <>
+            <RewardImageUploader rewardId={draft.id} imageUrl={imageUrl} />
+            <div className="sm:col-span-3">
+              <label className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                Caption / alt text
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Shown under the image (optional)"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+        {draft.kind === "video" && (
+          <>
+            <RewardVideoUploader rewardId={draft.id} videoUrl={videoUrl} />
+            <div className="sm:col-span-3">
+              <label className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+                Caption (optional)
+              </label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="Shown under the video"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+              />
+            </div>
+          </>
+        )}
+        {draft.kind !== "image" && draft.kind !== "video" && (
+          <div className="sm:col-span-3">
+            <label className="text-[11px] uppercase tracking-[0.18em] text-text-muted block mb-1.5">
+              Content (JSON shape per kind)
+            </label>
+            <textarea
+              className="input-field font-mono text-xs"
+              rows={5}
+              value={contentText}
+              onChange={(e) => setContentText(e.target.value)}
+            />
+          </div>
+        )}
         <NumberField
           label="Order"
           value={draft.ord}
@@ -997,7 +1164,7 @@ function RewardEditor({ reward }: { reward: RewardT }) {
       </div>
       {error && <p className="text-red-400 text-sm">{error}</p>}
       <div className="flex justify-end">
-        <Button onClick={save} disabled={pending} variant="gold" size="sm">
+        <Button type="button" onClick={save} disabled={pending} variant="gold" size="sm">
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save reward
         </Button>
@@ -1014,37 +1181,71 @@ function NewRewardRow({
   nextOrd: number;
 }) {
   const [pending, start] = useTransition();
-  const [open, setOpen] = useState(false);
-  if (!open) {
-    return (
-      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        <Plus className="size-3.5" /> Add reward
-      </Button>
-    );
-  }
   return (
-    <Button
-      variant="gold"
-      size="sm"
-      disabled={pending}
-      onClick={() => {
-        start(async () => {
-          await upsertReward({
-            module_id: moduleId,
-            ord: nextOrd,
-            kind: "letter",
-            title: "Letter from your Professor",
-            description: "A short personal letter on completing this module.",
-            content: {
-              body: "Operator,\n\nYou earned this. Don't dilute the standard.\n\n— The Professor",
-            },
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        onClick={() => {
+          start(async () => {
+            await upsertReward({
+              module_id: moduleId,
+              ord: nextOrd,
+              kind: "letter",
+              title: "Letter from your Professor",
+              description: "A short personal letter on completing this module.",
+              content: {
+                body: "Operator,\n\nYou earned this. Don't dilute the standard.\n\n— The Professor",
+              },
+            });
           });
-          setOpen(false);
-        });
-      }}
-    >
-      <Plus className="size-3.5" /> Insert default letter reward
-    </Button>
+        }}
+      >
+        <Plus className="size-3.5" /> Letter reward
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        onClick={() => {
+          start(async () => {
+            await upsertReward({
+              module_id: moduleId,
+              ord: nextOrd,
+              kind: "video",
+              title: "Professor video",
+              description: "A video message earned for completing this module.",
+              content: { video_url: "", caption: "" },
+            });
+          });
+        }}
+      >
+        <Plus className="size-3.5" /> Video reward
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        onClick={() => {
+          start(async () => {
+            await upsertReward({
+              module_id: moduleId,
+              ord: nextOrd,
+              kind: "image",
+              title: "Professor image",
+              description: "A visual unlock earned for completing this module.",
+              content: { image_url: "", caption: "" },
+            });
+          });
+        }}
+      >
+        <Plus className="size-3.5" /> Image reward
+      </Button>
+    </div>
   );
 }
 
@@ -1052,10 +1253,12 @@ function NumberField({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: number;
   onChange: (n: number) => void;
+  hint?: string;
 }) {
   return (
     <label className="block">
@@ -1068,6 +1271,11 @@ function NumberField({
         value={value}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
       />
+      {hint ? (
+        <span className="mt-1 block text-[11px] text-text-muted leading-snug">
+          {hint}
+        </span>
+      ) : null}
     </label>
   );
 }
